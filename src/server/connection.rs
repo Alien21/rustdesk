@@ -1889,6 +1889,12 @@ impl Connection {
             return true;
         }
         self.awaiting_2fa = false;
+        if let Some(context) = self.server_access.as_ref() {
+            if let Err(err) = crate::server_access::validate_admission(context).await {
+                self.send_login_error(err.to_string()).await;
+                return false;
+            }
+        }
         if let Some(keep_alive) = self.prepare_terminal_login_for_authorization().await {
             return keep_alive;
         }

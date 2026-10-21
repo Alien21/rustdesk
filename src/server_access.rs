@@ -30,6 +30,7 @@ pub struct SessionContext {
     pub uuid: String,
     pub identity: String,
     pub guest: bool,
+    pub public_access: bool,
     pub expires_at: u64,
     server: String,
     key: String,
@@ -43,6 +44,8 @@ struct Session {
     relay_server: String,
     ticket: String,
     guest: bool,
+    #[serde(default)]
+    public_access: bool,
     peer_addr: String,
     #[serde(default)]
     certificate: String,
@@ -206,6 +209,29 @@ pub async fn validate_admission(context: &SessionContext) -> ResultType<()> {
     if secret.is_empty() {
         bail!("Private server access key is not configured");
     }
+    if context.public_access {
+        if context.guest
+            || !crate::access_config::allow_public_connections()
+            || now()? >= context.expires_at
+        {
+            bail!("Public connections to this device are disabled or expired");
+        }
+        let response = rpc(
+            &context.server,
+            &context.key,
+            &secret,
+            json!({"op":"validate_public_access", "id":context.identity, "uuid":context.uuid}),
+        )
+        .await?;
+        if response["op"] != "valid"
+            || response["valid"] != true
+            || !crate::access_config::allow_public_connections()
+            || now()? >= context.expires_at
+        {
+            bail!("Public connections to this device are disabled or expired");
+        }
+        return Ok(());
+    }
     if !context.guest {
         return Ok(());
     }
@@ -265,7 +291,7 @@ pub async fn connect_owned(
         bail!("Invalid private server connection response");
     }
     let session: Session = serde_json::from_value(response)?;
-    if session.id != target || (session.guest && !is_invitation_id(target)) {
+    if session.id != target || session.public_access || (session.guest && !is_invitation_id(target)) {
         bail!("Private server returned a different target identity");
     }
     let certificate = STANDARD
@@ -289,7 +315,8 @@ async fn serve_session(
     session: Session,
 ) -> ResultType<()> {
     if session.guest {
-        if !is_invitation_id(&session.id)
+        if session.public_access
+            || !is_invitation_id(&session.id)
             || !crate::access_config::invitations_enabled()
             || now()? >= session.expires_at
         {
@@ -297,6 +324,11 @@ async fn serve_session(
         }
     } else if session.id != Config::get_id() {
         bail!("Private session targets a different device");
+    }
+    if session.public_access
+        && (!crate::access_config::allow_public_connections() || now()? >= session.expires_at)
+    {
+        bail!("Public connections to this device are disabled or expired");
     }
     let peer_addr = session
         .peer_addr
@@ -307,6 +339,7 @@ async fn serve_session(
         uuid: session.uuid,
         identity: session.id,
         guest: session.guest,
+        public_access: session.public_access,
         expires_at: session.expires_at,
         server: host,
         key,
@@ -334,7 +367,12 @@ pub async fn run_host(
     let key = crate::get_key_with_dns(true).await?;
     let started = Instant::now();
     let mut stream = control(&host, &key, &secret).await?;
-    access_transport::send_json(&mut stream, &json!({"op":"register"})).await?;
+    let allow_public = crate::access_config::allow_public_connections();
+    access_transport::send_json(
+        &mut stream,
+        &json!({"op":"register", "allow_public":allow_public}),
+    )
+    .await?;
     if receive(&mut stream).await?["op"] != "registered" {
         bail!("Private host registration was not acknowledged");
     }
@@ -353,6 +391,7 @@ pub async fn run_host(
                 _ = heartbeat.tick() => {
                     if restart.load(std::sync::atomic::Ordering::SeqCst)
                         || !crate::access_config::configured()
+                        || crate::access_config::allow_public_connections() != allow_public
                         || crate::access_config::connection_secret_for(&host).await? != secret {
                         return Ok(());
                     }
@@ -392,6 +431,22 @@ pub async fn run_host(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn legacy_sessions_are_not_public_access_without_an_explicit_server_flag() {
+        let legacy = json!({
+            "uuid":"session", "id":"123456789", "expires_at":123,
+            "relay_server":"example.com", "ticket":"ticket", "guest":false,
+            "peer_addr":"127.0.0.1:1234"
+        });
+        let session: Session = serde_json::from_value(legacy.clone()).unwrap();
+        assert!(!session.public_access);
+        let mut public = legacy;
+        public["public_access"] = json!(true);
+        let session: Session = serde_json::from_value(public).unwrap();
+        assert!(session.public_access);
+        assert!(!session.guest);
+    }
 
     #[test]
     fn invitation_ids_require_the_reserved_prefix_and_nine_digits() {

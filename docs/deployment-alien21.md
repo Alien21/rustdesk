@@ -1,6 +1,6 @@
 # Nasazení na rustdesk.alien21.lan
 
-Návod vychází z read-only auditu 21. 10. 2026. Příkazy provádí správce na Linux serveru; nic z tohoto návodu nebylo na server nasazeno.
+Výchozí stav návodu vychází z read-only auditu 21. 10. 2026. Příkazy provádí správce na Linux serveru; popis nového smíšeného režimu se vztahuje k aktuálním zdrojům a nenahrazuje ověření nasazených binárek.
 
 ## Váš bezplatný stack a RustDesk Server Pro
 
@@ -14,7 +14,7 @@ Naše DNS načítání veřejného Key, Private key/ACCESS_KEY a dočasné pozv�
 
 Server je Debian 13.7 amd64, interní adresa `10.30.10.139`, veřejné jméno `rustdesk.home.alien21.com`. Balíčky hbbs/hbbr mají verzi 1.1.14. Jednotky `rustdesk-hbbs.service` a `rustdesk-hbbr.service` jsou v `/lib/systemd/system/`, spouštějí `/usr/bin/hbbs` a `/usr/bin/hbbr` a pracují v `/var/lib/rustdesk-server/`. Nemají EnvironmentFile; prázdné User/Group znamená výchozí root.
 
-Nejprve aktualizujte vlastní klienty. Na Windows proveďte instalaci/aktualizaci z nového EXE, aby novou verzi používala i služba RustDesk. Potom klienta spusťte z aktualizované instalace, například z nabídky Start; GUI a služba musí používat stejnou kopii programu. Po zapnutí ACCESS_KEY se neupravené vlastní klienty přestanou registrovat a obecně používat relay; neupravení hosté budou potřebovat platnou pozvánku. První verze soukromých spojení používá vždy relay, proto počítejte s provozem přes server i tam, kde dříve fungovalo P2P.
+Nejprve aktualizujte vlastní klienty. Na Windows proveďte instalaci/aktualizaci z nového EXE, aby novou verzi používala i služba RustDesk. Potom klienta spusťte z aktualizované instalace, například z nabídky Start; GUI a služba musí používat stejnou kopii programu. Původní vlastní klienti se mohou dále registrovat jako cíle a klient s ACCESS_KEY se k nim může připojit. Zahájení spojení mezi dvěma původními klienty server odmítá. Přístup původního klienta na skutečné ID našeho klienta řídí přepínač na tomto cílovém PC; časově omezené pozvánky fungují samostatně. První verze soukromých spojení používá vždy relay, proto počítejte s provozem přes server i tam, kde dříve fungovalo P2P.
 
 Samotné DNS hledání veřejného Key funguje v upraveném klientu i se starým serverem. Ochrana pomocí ACCESS_KEY a pozvánky vyžadují oba upravené servery; vlastní klienty i neupravení hosté používají stávající porty serveru.
 
@@ -133,13 +133,20 @@ tail -n 40 /var/log/rustdesk-server/hbbs.log /var/log/rustdesk-server/hbbs.error
 
 Soukromé i veřejné spojení obsluhují stejné listenery TCP 21116/21117. Původní jednotky zapisují hlavní logy do `/var/log/rustdesk-server/`, proto kontrolujte i tyto soubory. Soukromý ACCESS_KEY předejte pouze vlastním upraveným klientům. Při další údržbě zálohujte také env soubor a oba drop-in adresáře. Při výměně samotných binárek zůstává verze v databázi dpkg původní; skutečnou ověříte `/usr/bin/hbbs --version` a `/usr/bin/hbbr --version`. Aby aktualizace balíčků nepřepsala vlastní binárky, nastavte `apt-mark hold rustdesk-server-hbbs rustdesk-server-hbbr`; další verze pak nasazujte vlastním sestavením.
 
-## Původní vlastní klienti po zapnutí ACCESS_KEY
+## Původní klienti a přístup zpět na vlastní PC
 
-**Nového klienta a stejný Private key potřebují všechna vlastní PC připojená k tomuto serveru, včetně jejich místní služby.** Veřejný Key členství nenahrazuje. Původní klient neumí Private key poslat, takže jeho registraci chráněný server odmítá: jeho ID bude offline a nepůjde na něj navázat běžné spojení. To je očekávané vynucení ochrany relay. Původní klient je podporovaný jako volající host s platnou pozvánkou `P-…`, nikoli jako vlastní registrované zařízení.
+Původní klienti na stávajících PC mohou ponechat svůj ID server, relay a veřejný Key. Nový server přijímá jejich registrace a heartbeat, zobrazuje je online a náš klient s Private key se k nim může připojit pomocí dosavadního hesla/potvrzení. Dva klienti bez Private key se přes tento server vzájemně spojit nemohou. Samotná registrace nedává právo obecně používat relay.
 
-Postupný přechod proto začíná aktualizací vlastních klientů ještě před zapnutím ACCESS_KEY. Automatické povolení starých registrací se v chráněném režimu nezavádí. Porty ani DNS se kvůli aktualizaci dalších PC nemění.
+Na každém aktualizovaném vlastním PC je pod Private key nový přepínač **Allow clients without the private key to connect to this device**, standardně vypnutý. Zapněte ho na PC, ke kterému se chcete ze starých klientů připojovat přímo přes skutečné ID. Server přijme toto nastavení pouze z autentizovaného řídicího spojení daného PC. I po zapnutí zůstává nutné jeho heslo/potvrzení a původní bezpečnostní nastavení.
 
-Samostatná oprava serveru zajistí, aby online indikace již aktualizovaných zařízení četla jejich živé autentizované registrace místo starého seznamu PeerMap. Tato oprava nedovoluje připojení k původním klientům bez Private key.
+Při vypnutém přepínači se původní klient dostane dovnitř jen přes platnou pozvánku P-…; klient s Private key má běžný přístup. Při zapnutém přepínači může skutečné ID oslovit kterýkoli původní klient se správným veřejným Key, nikoli jen konkrétních 50 PC. Veřejný Key lze opsat a shodné připojení lze vyvolat i přes ID@server?key=… bez trvalého uložení serveru v nastavení. Skutečné ID je při zapnutí nezávislé na expiraci pozvánky. Vypnutí brání novým přijetím včetně čekajících, přijaté relace pokračují.
+
+Aktualizujte oba serverové procesy hbbs i hbbr společně; starší verze nerozumí novým grantům pro smíšené dvojice. Zachovejte klíče a databázi serveru. Dříve soukromě registrované ID je v databázi chráněné před převzetím původním klientem; jeho převod na původního klienta vyžaduje vědomou správu serveru. Totéž platí pro změnu připnutého veřejného klíče starého zařízení.
+
+Online indikace kombinuje živé registrace původních klientů a autentizované řídicí kanály našich klientů. Kvůli této úpravě se neotevírají další porty a nemění se DNS: řízení i relay používají stávající TCP 21116/21117 a registrace původních klientů stávající UDP 21116. Stavové dotazy zůstávají na původním TCP 21115.
+
+Ikony importu/exportu v ID/Relay dialogu přenášejí jen ID server, relay, API a veřejný Key. Private key, nové přepínače a platnost pozvánek jsou mimo tento formát. Import neznámá soukromá pole ignoruje a uložený Private key nepřepisuje ani nemaže.
+
 ## Klienti a pozvánka
 
 Na vlastních aktualizovaných počítačích nastavte ID server `rustdesk.home.alien21.com`, relay ponechte automatický nebo stejnou doménu a do nového pole Private key vložte hodnotu ACCESS_KEY z chráněného env souboru (bez `ACCESS_KEY=`). Je to jiný údaj než veřejný Key. Po uložení pole ukazuje pevných 20 teček. Veřejný Key lze ponechat prázdný po úspěšném ověření DNSSEC výše.
@@ -152,7 +159,7 @@ P-254785236@rustdesk.home.alien21.com?key=KKh+mCbFddyWWVEtMONkRTtFY2fiw9mVAJa2MZ
 
 Neupravený klient potřebuje `?key=`; neumí toto nové DNS hledání. Base64 vložte přímo v uvedeném tvaru včetně `+` a `=`. Upravenému klientu s podporou DNS lze poslat jen `P-…@rustdesk.home.alien21.com`. Host nedostane ACCESS_KEY a samotným nastavením vašeho relay nezíská obecný přístup. Nadále platí heslo/potvrzení/2FA hostitelského klienta.
 
-Pozvánka je opakovaně použitelná po zvolenou dobu. Expirace či odvolání zabrání přijetí nových spojení, včetně dosud nepotvrzeného požadavku; již přijaté relace pokračují. Po restartu registrace hostitele vytvořte novou pozvánku. Ověřte zvlášť vlastní připojení, stock hosta s platnou pozvánkou a odmítnutí staré pozvánky i anonymního skutečného ID.
+Pozvánka je opakovaně použitelná po zvolenou dobu. Expirace či odvolání zabrání přijetí nových spojení, včetně dosud nepotvrzeného požadavku; již přijaté relace pokračují. Po restartu registrace hostitele vytvořte novou pozvánku. Ověřte zvlášť vlastní připojení, PSK klienta k původnímu cíli, odmítnutí stock-to-stock spojení a původního hosta s platnou pozvánkou. Veřejné skutečné ID musí být odmítnuté při vypnutém přepínači a dostupné při zapnutém; stará pozvánka musí být odmítnutá v obou stavech.
 
 Pozvánky potřebují dosažitelné výše uvedené TCP porty serveru; DNS only v Cloudflare ponechá přímé směrování na server, samo však nenahrazuje firewall/NAT. Kvůli tomuto relay režimu není potřeba přesměrovávat veřejné porty na počítač sdílející plochu ani na počítač hosta. Celé připojení z neupraveného veřejného GUI klienta zatím nebylo ověřeno; ověřené jsou parser formátu a serverový protokol.
 
@@ -164,7 +171,7 @@ Oranžové upozornění přidal upstream v commitu `c7f212df2` (20. 10. 2026); s
 
 V místním logu klienta se při souběhu nového přenosného EXE a starší nainstalované verze 1.5.0+68 opakovaně odpojuje IPC kanál (`reset by the peer`). Červený stav a heslo „Generating…“ proto nelze považovat za důkaz nedostupnosti hbbs: GUI nedostává stav od místního procesu. Základ klienta navíc při IPC ověřuje shodu cesty spustitelného souboru; konflikt cest původní instalace a přenosné kopie je podle zdroje a resetů nejpravděpodobnější příčina (přesný důvod odmítnutí by potvrdil log backendu). Tuto ochranu neoslabujeme. Pro běžný provoz aktualizujte klienta včetně jeho místní služby a ověřte, že GUI i služba používají stejnou instalaci. Samotné spuštění přenosného EXE službu neaktualizuje. Přenosný test se stávajícím profilem a ID funguje po dočasném zastavení původní služby a ukončení jejího tray. Oddělený profil ani nové testovací ID se v této sestavě nezavádějí. Původní hbbs/hbbr mohou při prázdném Private key zůstat beze změny.
 
-Nový dialog se nyní nejprve ptá na podporu přes původní konfigurační IPC zprávu. Starší nebo nedostupná služba tak místo surové chyby v novém ovládání vyvolá srozumitelnou výzvu k aktualizaci/restartu. Dotaz na stav nevolá hbbs. Prázdný Private key zachovává původní síťovou cestu; pokud je soukromý režim již nakonfigurován, nedostupná služba nesmí jeho přihlašovací údaje potichu zahodit. Upravený server bez nastaveného ACCESS_KEY používá původní veřejný režim; s ACCESS_KEY naopak odmítá obecné použití bez PSK a veřejné hosty omezuje na platné pozvánky.
+Nový dialog se nyní nejprve ptá na podporu přes původní konfigurační IPC zprávu. Starší nebo nedostupná služba tak místo surové chyby v novém ovládání vyvolá srozumitelnou výzvu k aktualizaci/restartu. Dotaz na stav nevolá hbbs. Prázdný Private key zachovává původní síťovou cestu; pokud je soukromý režim již nakonfigurován, nedostupná služba nesmí jeho přihlašovací údaje potichu zahodit. Upravený server bez nastaveného ACCESS_KEY používá původní veřejný režim; s ACCESS_KEY naopak povoluje jen dvojice podle matice smíšeného režimu: veřejný volající potřebuje platnou pozvánku nebo výslovný souhlas PSK cíle pro jeho skutečné ID a dvě původní strany se spojit nesmějí.
 
 ### Přenosný test vedle zachované instalace
 

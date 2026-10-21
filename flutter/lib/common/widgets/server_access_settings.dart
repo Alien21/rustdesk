@@ -35,12 +35,18 @@ class ServerAccessSettingsState extends State<ServerAccessSettings> {
   bool _secretChanged = false;
   bool _clear = false;
   bool _enabled = false;
+  bool _allowPublic = false;
+  bool _publicAccessSupported = false;
+  String _publicServer = '';
   bool _dirty = false;
   String? _error;
 
   @override
   void initState() {
     super.initState();
+    _publicServer = widget.serverController.text.trim();
+    final requestedServer = _publicServer;
+    widget.serverController.addListener(_serverChanged);
     serverAccessRequest({'action': 'status'})
         .then((value) {
           if (!mounted) return;
@@ -48,6 +54,10 @@ class ServerAccessSettingsState extends State<ServerAccessSettings> {
             _hasSecret = value['has_secret'] == true;
             _secret.text = _hasSecret ? '••••••••••••••••••••' : '';
             _enabled = value['enabled'] == true;
+            _publicAccessSupported = value['public_access_supported'] == true;
+            _allowPublic = _publicAccessSupported &&
+                value['allow_public'] == true &&
+                widget.serverController.text.trim() == requestedServer;
             _minutes.text = (value['minutes'] ?? 10).toString();
             _serviceUnavailable = value['available'] == false;
             _loaded = !_serviceUnavailable;
@@ -56,6 +66,14 @@ class ServerAccessSettingsState extends State<ServerAccessSettings> {
         .catchError((Object error) {
           if (mounted) setState(() => _error = error.toString());
         });
+  }
+
+  void _serverChanged() {
+    final server = widget.serverController.text.trim();
+    if (server != _publicServer) {
+      _publicServer = server;
+      if (_allowPublic) setState(() => _allowPublic = false);
+    }
   }
 
   bool validate() {
@@ -67,7 +85,7 @@ class ServerAccessSettingsState extends State<ServerAccessSettings> {
         'Invitation validity must be between 1 and 1440 minutes',
       );
     } else if (widget.serverController.text.trim().isEmpty &&
-        ((_secretChanged && _secret.text.isNotEmpty) || _enabled)) {
+        ((_secretChanged && _secret.text.isNotEmpty) || _enabled || _allowPublic)) {
       error = translate('ID Server');
     }
     setState(() => _error = error);
@@ -92,6 +110,7 @@ class ServerAccessSettingsState extends State<ServerAccessSettings> {
             : null,
         'clear': _clear || (_secretChanged && _secret.text.isEmpty),
         'enabled': _enabled,
+        'allow_public': _publicAccessSupported && _allowPublic,
         'minutes': minutes,
       });
       _secret.clear();
@@ -104,6 +123,7 @@ class ServerAccessSettingsState extends State<ServerAccessSettings> {
 
   @override
   void dispose() {
+    widget.serverController.removeListener(_serverChanged);
     _secret.clear();
     _secret.dispose();
     _minutes.dispose();
@@ -146,7 +166,10 @@ class ServerAccessSettingsState extends State<ServerAccessSettings> {
                   _secretChanged = true;
                   _dirty = true;
                   _clear = false;
-                  if (_secret.text.isEmpty) _enabled = false;
+                  if (_secret.text.isEmpty) {
+                    _enabled = false;
+                    _allowPublic = false;
+                  }
                 }),
                 decoration: InputDecoration(
                   contentPadding: const EdgeInsets.symmetric(
@@ -164,6 +187,7 @@ class ServerAccessSettingsState extends State<ServerAccessSettings> {
                             _secretChanged = true;
                             _editing = true;
                             _enabled = false;
+                            _allowPublic = false;
                             _dirty = true;
                           }),
                         )
@@ -173,6 +197,29 @@ class ServerAccessSettingsState extends State<ServerAccessSettings> {
             ),
           ],
         ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: Text(translate(
+            'Allow clients without the private key to connect to this device',
+          )),
+          value: _allowPublic,
+          onChanged: _loaded && _publicAccessSupported && hasValue
+              ? (value) => setState(() {
+                  _allowPublic = value == true;
+                  _dirty = true;
+                })
+              : null,
+        ),
+        if (_loaded && !_publicAccessSupported)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              translate(
+                'Update the RustDesk client service to allow public connections to this device',
+              ),
+              style: TextStyle(color: Theme.of(context).hintColor),
+            ),
+          ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: Text(translate('Enable guest invitations')),

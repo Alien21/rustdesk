@@ -10,6 +10,8 @@ static STORE_LOCK: Mutex<()> = Mutex::new(());
 struct Stored {
     server: String,
     secret: Vec<u8>,
+    #[serde(default)]
+    allow_public: bool,
     enabled: bool,
     minutes: u32,
 }
@@ -23,6 +25,8 @@ pub enum UiRequest {
         secret: Option<String>,
         clear: bool,
         enabled: bool,
+        #[serde(default)]
+        allow_public: bool,
         minutes: u32,
     },
     Create,
@@ -113,6 +117,12 @@ pub fn invitations_enabled() -> bool {
         .unwrap_or(false)
 }
 
+pub fn allow_public_connections() -> bool {
+    load()
+        .map(|v| same_server(&v.server, &server()) && !v.secret.is_empty() && v.allow_public)
+        .unwrap_or(false)
+}
+
 pub fn invitation_minutes() -> u32 {
     load().map(|v| v.minutes.clamp(1, 1440)).unwrap_or(10)
 }
@@ -122,6 +132,7 @@ fn save(
     secret: Option<String>,
     clear: bool,
     enabled: bool,
+    allow_public: bool,
     minutes: u32,
 ) -> ResultType<()> {
     anyhow::ensure!(
@@ -129,7 +140,7 @@ fn save(
         "Invitation validity must be between 1 and 1440 minutes"
     );
     anyhow::ensure!(
-        !server.trim().is_empty() || (secret.is_none() && !enabled),
+        !server.trim().is_empty() || (secret.is_none() && !enabled && !allow_public),
         "Enter an ID server before a private key"
     );
     anyhow::ensure!(
@@ -153,8 +164,13 @@ fn save(
         !enabled || !value.secret.is_empty(),
         "Enter a private key before enabling guest invitations"
     );
+    anyhow::ensure!(
+        !allow_public || !value.secret.is_empty() || clear,
+        "Enter a private key before allowing public connections"
+    );
     value.server = server;
     value.enabled = enabled;
+    value.allow_public = allow_public && !clear && !value.secret.is_empty();
     value.minutes = minutes;
     let path = Config::file().with_extension("access.json");
     let temporary = path.with_extension("access.tmp");
@@ -178,16 +194,17 @@ fn save(
 async fn dispatch(request: UiRequest) -> ResultType<serde_json::Value> {
     match request {
         UiRequest::Status => Ok(
-            serde_json::json!({"available": true, "has_secret": configured(), "enabled": invitations_enabled(), "minutes": invitation_minutes()}),
+            serde_json::json!({"available": true, "public_access_supported": true, "has_secret": configured(), "enabled": invitations_enabled(), "allow_public": allow_public_connections(), "minutes": invitation_minutes()}),
         ),
         UiRequest::Save {
             server,
             secret,
             clear,
             enabled,
+            allow_public,
             minutes,
         } => {
-            save(server, secret, clear, enabled, minutes)?;
+            save(server, secret, clear, enabled, allow_public, minutes)?;
             #[cfg(not(target_os = "ios"))]
             crate::rendezvous_mediator::RendezvousMediator::restart();
             Ok(serde_json::json!({}))
@@ -289,7 +306,7 @@ fn unsupported_service(
     match request {
         IpcRequest::Credentials(target) if !private_configured || !same_server(target, current_server) => Ok(serde_json::json!({"secret": ""})),
         IpcRequest::Ui(json) if matches!(serde_json::from_str::<UiRequest>(json), Ok(UiRequest::Status)) => {
-            Ok(serde_json::json!({"available": false, "has_secret": false, "enabled": false, "minutes": 10}))
+            Ok(serde_json::json!({"available": false, "public_access_supported": false, "has_secret": false, "enabled": false, "allow_public": false, "minutes": 10}))
         }
         _ => anyhow::bail!("Install or restart the updated RustDesk client service to use private keys and guest invitations"),
     }
@@ -342,6 +359,23 @@ pub async fn ui_request(json: String) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn public_connections_require_explicit_opt_in_in_old_and_new_settings() {
+        let legacy = r#"{"server":"example.com","secret":[1],"enabled":true,"minutes":10}"#;
+        let stored: Stored = serde_json::from_str(legacy).unwrap();
+        assert!(!stored.allow_public);
+        let old_save = r#"{"action":"save","server":"example.com","secret":null,"clear":false,"enabled":true,"minutes":10}"#;
+        assert!(matches!(
+            serde_json::from_str::<UiRequest>(old_save).unwrap(),
+            UiRequest::Save { allow_public: false, .. }
+        ));
+        let opt_in = old_save.replace("\"minutes\":10", "\"allow_public\":true,\"minutes\":10");
+        assert!(matches!(
+            serde_json::from_str::<UiRequest>(&opt_in).unwrap(),
+            UiRequest::Save { allow_public: true, .. }
+        ));
+    }
 
     #[test]
     fn credential_scope_compares_authority_and_effective_port() {
