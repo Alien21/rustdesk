@@ -65,3 +65,9 @@ Klient zachovává výchozí upstream `1.5.1` a používá označení `1.5.1-a21
 Přenosný test s dočasně vypnutou původní službou potvrdil vlastní backend, zachované ID, odpověď hbbs přes UDP 21116 a vymizení resetů IPC. Původní služba i tray byly obnoveny, nová verze se neinstalovala. Samostatný profil, nové ID ani změna IPC autentizace nejsou součástí opravy.
 
 Výjimka z UAC pro vlastní přenosný backend byla na výslovný požadavek uživatele odstraněna. `src/ui_interface.rs::check_super_user_permission` znovu přesně odpovídá původnímu upstreamu; odemčení nadále vyžaduje původní ověření administrátora a případný PIN. Zelený stav Ready potvrdil uživatel, problém s neaktivními nastaveními po odemčení zatím zůstává otevřený.
+
+## Online indikace soukromých zařízení
+
+Oprava hbbs odděluje online stav chráněného režimu od staré PeerMap: stávající OnlineRequest na TCP 21115 vrací živé autentizované registrace a po uzavření posledního řídicího kanálu zařízení přejde offline. Nové porty, povolení původních registrací ani nová oprávnění relay nevznikají. Dvě nové jednotkové regrese pokrývají pořadí bitů a životní cyklus kanálu. Prošlo 25 serverových a 12 klientských testů; skutečný wire test potvrdil online stav, výměnu kanálu a odpojení spolu se zachováním odmítnutí anonymních registrací, pozvánek, expirace a původního veřejného režimu.
+
+Podpora původních klientů jako trvalých vlastních zařízení je samostatné navrhované rozšíření, které tato oprava neimplementuje. Uživatel potvrdil funkční hostovské připojení v nasazeném chráněném režimu; obousměrná pravidla pro smíšenou síť dosud nejsou součástí hotových binárek.

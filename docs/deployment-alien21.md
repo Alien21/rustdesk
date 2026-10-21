@@ -133,6 +133,13 @@ tail -n 40 /var/log/rustdesk-server/hbbs.log /var/log/rustdesk-server/hbbs.error
 
 Soukromé i veřejné spojení obsluhují stejné listenery TCP 21116/21117. Původní jednotky zapisují hlavní logy do `/var/log/rustdesk-server/`, proto kontrolujte i tyto soubory. Soukromý ACCESS_KEY předejte pouze vlastním upraveným klientům. Při další údržbě zálohujte také env soubor a oba drop-in adresáře. Při výměně samotných binárek zůstává verze v databázi dpkg původní; skutečnou ověříte `/usr/bin/hbbs --version` a `/usr/bin/hbbr --version`. Aby aktualizace balíčků nepřepsala vlastní binárky, nastavte `apt-mark hold rustdesk-server-hbbs rustdesk-server-hbbr`; další verze pak nasazujte vlastním sestavením.
 
+## Původní vlastní klienti po zapnutí ACCESS_KEY
+
+**Nového klienta a stejný Private key potřebují všechna vlastní PC připojená k tomuto serveru, včetně jejich místní služby.** Veřejný Key členství nenahrazuje. Původní klient neumí Private key poslat, takže jeho registraci chráněný server odmítá: jeho ID bude offline a nepůjde na něj navázat běžné spojení. To je očekávané vynucení ochrany relay. Původní klient je podporovaný jako volající host s platnou pozvánkou `P-…`, nikoli jako vlastní registrované zařízení.
+
+Postupný přechod proto začíná aktualizací vlastních klientů ještě před zapnutím ACCESS_KEY. Automatické povolení starých registrací se v chráněném režimu nezavádí. Porty ani DNS se kvůli aktualizaci dalších PC nemění.
+
+Samostatná oprava serveru zajistí, aby online indikace již aktualizovaných zařízení četla jejich živé autentizované registrace místo starého seznamu PeerMap. Tato oprava nedovoluje připojení k původním klientům bez Private key.
 ## Klienti a pozvánka
 
 Na vlastních aktualizovaných počítačích nastavte ID server `rustdesk.home.alien21.com`, relay ponechte automatický nebo stejnou doménu a do nového pole Private key vložte hodnotu ACCESS_KEY z chráněného env souboru (bez `ACCESS_KEY=`). Je to jiný údaj než veřejný Key. Po uložení pole ukazuje pevných 20 teček. Veřejný Key lze ponechat prázdný po úspěšném ověření DNSSEC výše.
