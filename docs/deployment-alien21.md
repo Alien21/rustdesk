@@ -2,6 +2,14 @@
 
 Návod vychází z read-only auditu 21. 10. 2026. Příkazy provádí správce na Linux serveru; nic z tohoto návodu nebylo na server nasazeno.
 
+## Váš bezplatný stack a RustDesk Server Pro
+
+Používáte bezplatné nativní klienty RustDesk, vlastní OSS servery `hbbs`/`hbbr` a samostatné vlastní API. Audit u API uváděl verzi 2.7; jeho konkrétní implementaci tím neurčil. Tento návod zachovává vaši API službu a HTTPS reverse proxy a nenahrazuje je produktem RustDesk Server Pro.
+
+Oficiální RustDesk Server Pro je placený serverový produkt s webovou konzolí, vlastním API a centrální správou. Jeho HTTP API standardně používá TCP 21114. Stejné číslo portu u vašeho samostatného free API neznamená použití Pro. [Oficiální rozdělení OSS a Pro](https://rustdesk.com/docs/en/self-host/), [funkce a licence Server Pro](https://rustdesk.com/docs/en/self-host/rustdesk-server-pro/).
+
+Naše DNS načítání veřejného Key, Private key/ACCESS_KEY a dočasné pozvánky jsou úpravy tohoto OSS sestavení; licenci Pro nevyžadují. Pokud chcete nejprve jen DNS načítání Key, stačí aktualizovat klienta: server, jeho porty a vaše API mohou zůstat současné. Následující výměna binárek, ACCESS_KEY a TCP 21120/21121 patří až k soukromému přístupu a pozvánkám.
+
 ## Výchozí stav a pořadí změn
 
 Server je Debian 13.7 amd64, interní adresa `10.30.10.139`, veřejné jméno `rustdesk.home.alien21.com`. Balíčky hbbs/hbbr mají verzi 1.1.14. Jednotky `rustdesk-hbbs.service` a `rustdesk-hbbr.service` jsou v `/lib/systemd/system/`, spouštějí `/usr/bin/hbbs` a `/usr/bin/hbbr` a pracují v `/var/lib/rustdesk-server/`. Nemají EnvironmentFile; prázdné User/Group znamená výchozí root.
@@ -45,16 +53,25 @@ curl --fail --get 'https://cloudflare-dns.com/dns-query' \
 
 ## Firewall a NAT
 
-Na routeru případně přesměrujte stejné externí porty na `10.30.10.139` a povolte je i na hostiteli:
+Pro běžné připojení nativních desktopových klientů k OSS serveru zachovejte toto minimum. Na routeru případně přesměrujte stejné externí porty na `10.30.10.139` a povolte je i ve firewallu serveru:
 
 | Porty | Účel |
 | --- | --- |
-| TCP 21115–21117 a UDP 21116 | zachovat stávající NAT test, veřejné rendezvous a guest relay |
-| TCP 21120 a 21121 | nově soukromé řízení hbbs a autentizovaný relay hbbr pro vlastní klienty |
-| TCP 21118 a 21119 | WebSocket pouze pokud jej používáte; přístup přes odpovídající reverse proxy |
-| HTTPS 443 | zachovat existující API/reverse proxy |
+| TCP 21115 | NAT test hbbs |
+| TCP a UDP 21116 | registrace, rendezvous a navazování spojení přes hbbs |
+| TCP 21117 | přenos přes relay hbbr |
 
-API nadále poslouchá na 21114; tento návod jej nově nezveřejňuje. WebSocket porty zpřístupňujte podle současné reverse proxy. [Oficiální porty a doporučení RustDesk](https://rustdesk.com/docs/en/self-host/index.html).
+Současná implementace soukromého řízení navíc používá **TCP 21120 (hbbs)** a **TCP 21121 (hbbr)** dostupné pro vlastní upravené klienty. Dva další porty jsou volbou tohoto protokolu; lze jej přepracovat na sdílení původních portů. Pro současné binárky jsou však při aktivním ACCESS_KEY potřeba. Jsou to porty této úpravy pro Private key a pozvánky, nikoli porty Pro nebo DNS vyhledávání. Neupravený host s platnou pozvánkou používá veřejné TCP 21116/21117; vlastník přitom používá i soukromé porty. Pouhé zapnutí DNS načítání Key žádný nový příchozí port nepotřebuje. [Oficiální minimum portů](https://rustdesk.com/docs/en/self-host/#ports-required).
+
+Ostatní služby posuzujte samostatně:
+
+| Port | Kdy jej potřebujete | Co platí pro váš server |
+| --- | --- | --- |
+| TCP 21114 | HTTP API; v oficiálním Server Pro také webová konzole | Zde jej již používá vaše samostatné free API. Zachovejte současné interní napojení reverse proxy; není potřeba jej nově vystavovat do internetu. |
+| TCP 443 | HTTPS reverse proxy pro API, případně WSS | Zachovejte současný HTTPS přístup k vašemu API. Samotné nativní OSS spojení tento příchozí port nepotřebuje. |
+| TCP 21118 a 21119 | Volitelné WebSocket rozhraní hbbs/hbbr | Pro běžné nativní spojení nejsou potřeba. Pokud používáte WS/web klienta, zachovejte odpovídající proxy; s WSS obvykle stačí dostupnost těchto portů z reverse proxy. |
+
+WebSocket listenery 21118/21119 obsahuje i OSS server; samotné tyto porty nejsou důkazem Pro ani kompletním webovým klientem. [Porty OSS serveru](https://github.com/rustdesk/rustdesk-server/blob/master/docs/environment-variables.md#port-reference). Příchozí HTTPS vašeho API je také oddělené od odchozího HTTPS 443 na Cloudflare DoH, které upravený klient používá pro DNS načítání Key.
 
 Audit našel pouze prázdnou výchozí `/etc/nftables.conf`. Runtime firewall a pravidla routeru tím nejsou ověřena. Před změnou si zobrazte `sudo nft list ruleset` a doplňte pravidla do používaného firewallu; existující pravidla nemažte ani neprovádějte `flush ruleset`.
 
@@ -120,7 +137,7 @@ Očekávejte nové listenery TCP 21120/21121. Původní jednotky zapisují hlavn
 
 Na vlastních aktualizovaných počítačích nastavte ID server `rustdesk.home.alien21.com`, relay ponechte automatický nebo stejnou doménu a do nového pole Private key vložte hodnotu ACCESS_KEY z chráněného env souboru (bez `ACCESS_KEY=`). Je to jiný údaj než veřejný Key. Po uložení pole ukazuje pevných 20 teček. Veřejný Key lze ponechat prázdný po úspěšném ověření DNSSEC výše.
 
-Zapněte pozvánky hostů, zvolte platnost v minutách a vytvořte pozvánku. Hostovi s neupraveným veřejným RustDesk klientem pošlete celý vygenerovaný řetězec, například (ukázkové ID nahraďte skutečným):
+Zapněte pozvánky hostů, zvolte platnost v minutách a vytvořte pozvánku. Hostovi stačí neupravený veřejný **bezplatný desktopový klient** RustDesk; Pro účet ani Pro klient není potřeba. Pošlete celý vygenerovaný řetězec, například (ukázkové ID nahraďte skutečným):
 
 ```text
 P-254785236@rustdesk.home.alien21.com?key=KKh+mCbFddyWWVEtMONkRTtFY2fiw9mVAJa2MZOmXdU=
@@ -129,3 +146,5 @@ P-254785236@rustdesk.home.alien21.com?key=KKh+mCbFddyWWVEtMONkRTtFY2fiw9mVAJa2MZ
 Neupravený klient potřebuje `?key=`; neumí toto nové DNS hledání. Base64 vložte přímo v uvedeném tvaru včetně `+` a `=`. Upravenému klientu s podporou DNS lze poslat jen `P-…@rustdesk.home.alien21.com`. Host nedostane ACCESS_KEY a samotným nastavením vašeho relay nezíská obecný přístup. Nadále platí heslo/potvrzení/2FA hostitelského klienta.
 
 Pozvánka je opakovaně použitelná po zvolenou dobu. Expirace či odvolání zabrání přijetí nových spojení, včetně dosud nepotvrzeného požadavku; již přijaté relace pokračují. Po restartu registrace hostitele vytvořte novou pozvánku. Ověřte zvlášť vlastní připojení, stock hosta s platnou pozvánkou a odmítnutí staré pozvánky i anonymního skutečného ID.
+
+Pozvánky potřebují dosažitelné výše uvedené TCP porty serveru; DNS only v Cloudflare ponechá přímé směrování na server, samo však nenahrazuje firewall/NAT. Kvůli tomuto relay režimu není potřeba přesměrovávat veřejné porty na počítač sdílející plochu ani na počítač hosta. Celé připojení z neupraveného veřejného GUI klienta zatím nebylo ověřeno; ověřené jsou parser formátu a serverový protokol.
