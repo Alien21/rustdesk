@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+"""Copy current Git working trees into disposable artifacts build directories."""
+import argparse
+import os
+from pathlib import Path
+import shutil
+import subprocess
+
+
+def git(repo, *args):
+    result = subprocess.run(["git", "-C", str(repo), *args], check=True, stdout=subprocess.PIPE)
+    return result.stdout
+
+
+def copy_repository(source, destination):
+    top = Path(os.fsdecode(git(source, "rev-parse", "--show-toplevel")).strip()).resolve()
+    if top != source.resolve():
+        raise ValueError(f"Uninitialized submodule or invalid repository: {source}")
+    entries = git(source, "ls-files", "--cached", "--others", "--exclude-standard", "--eol", "-z")
+    executable = set()
+    for entry in git(source, "ls-files", "--stage", "-z").split(b"\0"):
+        if entry.startswith(b"100755 "):
+            executable.add(os.fsdecode(entry.split(b"\t", 1)[1]))
+    seen = set()
+    destination.mkdir(parents=True, exist_ok=True)
+    for entry in entries.split(b"\0"):
+        if not entry:
+            continue
+        attributes, raw_name = entry.split(b"\t", 1)
+        name = os.fsdecode(raw_name)
+        relative = Path(name)
+        if relative.is_absolute() or ".." in relative.parts:
+            raise ValueError(f"Invalid Git path: {name}")
+        if name in seen:
+            continue
+        seen.add(name)
+        original, copied = source / relative, destination / relative
+        if original.is_dir():
+            copy_repository(original, copied)
+        elif original.is_file():
+            copied.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(original, copied)
+            # A Windows checkout may have CRLF. Git identifies text so binary assets stay intact.
+            if b"w/crlf" in attributes or b"w/mixed" in attributes:
+                copied.write_bytes(copied.read_bytes().replace(b"\r\n", b"\n"))
+            if name in executable:
+                copied.chmod(copied.stat().st_mode | 0o111)
+        elif original.is_symlink():
+            raise ValueError(f"Broken source symlink: {original}")
+        # Tracked files deleted in the working tree are intentionally absent.
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--client-source", required=True, type=Path)
+    parser.add_argument("--server-source", required=True, type=Path)
+    parser.add_argument("--destination", required=True, type=Path)
+    parser.add_argument("--only", choices=("all", "client", "server"), default="all")
+    args = parser.parse_args()
+    client = args.client_source.resolve()
+    destination = args.destination.resolve()
+    # Only these two owned, generated locations may be replaced.
+    allowed = {client / "artifacts" / "build" / name for name in ("linux-x64", "windows-x64")}
+    if destination not in allowed:
+        raise ValueError("Destination must be artifacts/build/linux-x64 or artifacts/build/windows-x64 inside the client repository")
+    selected = (("client", client), ("server", args.server_source.resolve()))
+    for name, source in selected:
+        if args.only not in ("all", name):
+            continue
+        if not (source / "Cargo.toml").is_file():
+            raise ValueError(f"Missing {name} source: {source}")
+        # Validate before removing an older build copy.
+        git(source, "rev-parse", "--show-toplevel")
+        target = destination / name
+        if target.is_symlink() or (target.exists() and target.resolve() != target):
+            raise ValueError(f"Build directory must not be a symlink: {target}")
+        if target.exists():
+            shutil.rmtree(target)
+        print(f"Staging {name}: {source} -> {target}", flush=True)
+        copy_repository(source, target)
+
+
+if __name__ == "__main__":
+    main()

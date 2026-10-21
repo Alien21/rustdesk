@@ -1,1 +1,5 @@
 * text=auto
+
+/build_*.sh text eol=lf
+/scripts/build/*.sh text eol=lf
+/scripts/build/debian-packages.txt text eol=lf
