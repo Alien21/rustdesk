@@ -475,7 +475,7 @@ build)
 
 	mkdir -p "flutter/android/app/src/main/jniLibs/${ANDROID_ABI}"
 
-	cp "target/${RUST_TARGET}/release/liblibrustdesk.so" \
+	cp "artifacts/target/${RUST_TARGET}/release/liblibrustdesk.so" \
 		"flutter/android/app/src/main/jniLibs/${ANDROID_ABI}/librustdesk.so"
 
 	cp "${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/${NDK_TARGET}/libc++_shared.so" \

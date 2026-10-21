@@ -97,9 +97,9 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source $HOME/.cargo/env
 git clone https://github.com/rustdesk/rustdesk
 cd rustdesk
-mkdir -p target/debug
+mkdir -p artifacts/target/debug
 wget https://raw.githubusercontent.com/c-smile/sciter-sdk/master/bin.lnx/x64/libsciter-gtk.so
-mv libsciter-gtk.so target/debug
+mv libsciter-gtk.so artifacts/target/debug
 VCPKG_ROOT=$HOME/vcpkg cargo run
 ```
 
@@ -122,13 +122,13 @@ docker run --rm -it -v $PWD:/home/user/rustdesk -v rustdesk-git-cache:/home/user
 Všimněte si, že prvotní sestavení může trvat déle (než se do mezipaměti uloží veškeré softwarové součásti, které jsou potřeba) – následná opakování už budou rychlejší. Pokud navíc potřebujete zadat různé argumenty příkazu pro sestavení, můžete tak učinit na konci příkazu v pozici `<OPTIONAL-ARGS>`. Například, pokud byste chtěli sestavit optimalizovanou verzi pro vydání, spustili byste výše uvedený příkaz následovaný `--release`. Výsledný spustitelný soubor se objeví v cílové složce na vašem systému a bude ho možné spustit pomocí:
 
 ```sh
-target/debug/rustdesk
+artifacts/target/debug/rustdesk
 ```
 
 Nebo, pokud spouštíte variantu pro vydání:
 
 ```sh
-target/release/rustdesk
+artifacts/target/release/rustdesk
 ```
 
 Ujistěte se, že tyto příkazy spouštíte z kořenového adresáře RustDesk, jinak aplikace nemusí být schopná nalézt potřebné prostředky (resources). Také si všimněte, že ostatní dílčí príkazy nástroje cargo, jako třeba `install` nebo `run` zatím nejsou prostřednictvím této metody podporovány, protože by vedly k instalaci či spuštění program uvnitř kontejneru namísto přímo v systému.

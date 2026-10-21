@@ -118,9 +118,9 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source $HOME/.cargo/env
 git clone --recurse-submodules https://github.com/rustdesk/rustdesk
 cd rustdesk
-mkdir -p target/debug
+mkdir -p artifacts/target/debug
 wget https://raw.githubusercontent.com/c-smile/sciter-sdk/master/bin.lnx/x64/libsciter-gtk.so
-mv libsciter-gtk.so target/debug
+mv libsciter-gtk.so artifacts/target/debug
 VCPKG_ROOT=$HOME/vcpkg cargo run
 ```
 
@@ -144,13 +144,13 @@ docker run --rm -it -v $PWD:/home/user/rustdesk -v rustdesk-git-cache:/home/user
 Перша збірка може тривати довше, доки залежності не буде кешовано. Наступні збірки виконуватимуться швидше. Якщо потрібно передати додаткові аргументи команді збірки, додайте їх після `rustdesk-builder` у кінці команди `docker run`. Наприклад, для оптимізованої release-збірки додайте `--release`. Отриманий виконуваний файл буде доступний у каталозі `target` вашої системи та його можна запустити так:
 
 ```sh
-target/debug/rustdesk
+artifacts/target/debug/rustdesk
 ```
 
 Або, якщо використовується release-збірка:
 
 ```sh
-target/release/rustdesk
+artifacts/target/release/rustdesk
 ```
 
 Запускайте ці команди з кореневого каталогу репозиторію RustDesk, інакше застосунок може не знайти потрібні ресурси. Також зверніть увагу, що інші підкоманди cargo, наприклад `install` або `run`, наразі не підтримуються цим способом, оскільки вони встановлюватимуть або запускатимуть програму всередині контейнера, а не на хост-системі.

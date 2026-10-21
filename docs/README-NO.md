@@ -115,9 +115,9 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source $HOME/.cargo/env
 git clone https://github.com/rustdesk/rustdesk
 cd rustdesk
-mkdir -p target/debug
+mkdir -p artifacts/target/debug
 wget https://raw.githubusercontent.com/c-smile/sciter-sdk/master/bin.lnx/x64/libsciter-gtk.so
-mv libsciter-gtk.so target/debug
+mv libsciter-gtk.so artifacts/target/debug
 VCPKG_ROOT=$HOME/vcpkg cargo run
 ```
 
@@ -140,13 +140,13 @@ docker run --rm -it -v $PWD:/home/user/rustdesk -v rustdesk-git-cache:/home/user
 Det kan ta lengere tid før avhengighetene blir bufret første gang du bygger, senere bygg er raskere. Hvis du trenger å spesifisere forkjellige argumenter til bygge kommandoen, kan du gjøre det på slutten av kommandoen ved `<OPTIONAL-ARGS>` feltet. For eksempel, hvis du ville bygge en optimalisert release versjon, ville du kjørt kommandoen over fulgt `--release`. Den kjørbare filen vill være tilgjengelig i mål direktive på ditt system, og kan bli kjørt med:
 
 ```sh
-target/debug/rustdesk
+artifacts/target/debug/rustdesk
 ```
 
 Eller, hvis du kjører ett release program:
 
 ```sh
-target/release/rustdesk
+artifacts/target/release/rustdesk
 ```
 
 Venligst pass på att du kjører disse kommandoene fra roten av RustDesk repositoret, eller kan det hende att applikasjon ikke finner de riktige ressursene. Pass også på att andre cargo subkommandoer som for eksempel `install` eller `run` ikke støttes med denne metoden da de vill installere eller kjøre programmet i konteineren istedet for verten.

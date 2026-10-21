@@ -90,9 +90,9 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source $HOME/.cargo/env
 git clone https://github.com/rustdesk/rustdesk
 cd rustdesk
-mkdir -p target/debug
+mkdir -p artifacts/target/debug
 wget https://raw.githubusercontent.com/c-smile/sciter-sdk/master/bin.lnx/x64/libsciter-gtk.so
-mv libsciter-gtk.so target/debug
+mv libsciter-gtk.so artifacts/target/debug
 VCPKG_ROOT=$HOME/vcpkg cargo run
 ```
 
@@ -115,13 +115,13 @@ docker run --rm -it -v $PWD:/home/user/rustdesk -v rustdesk-git-cache:/home/user
 ഡിപൻഡൻസികൾ കാഷെ ചെയ്യുന്നതിനുമുമ്പ് ആദ്യ ബിൽഡ് കൂടുതൽ സമയമെടുത്തേക്കാം, തുടർന്നുള്ള ബിൽഡുകൾ വേഗത്തിലാകും. കൂടാതെ, നിങ്ങൾക്ക് ബിൽഡ് കമാൻഡിലേക്ക് വ്യത്യസ്ത ആർഗ്യുമെന്റുകൾ വ്യക്തമാക്കണമെങ്കിൽ, കമാൻഡിന്റെ അവസാനം `<OPTIONAL-ARGS>` സ്ഥാനത്ത് നിങ്ങൾക്ക് അങ്ങനെ ചെയ്യാം. ഉദാഹരണത്തിന്, നിങ്ങൾ ഒരു ഒപ്റ്റിമൈസ് ചെയ്ത റിലീസ് പതിപ്പ് നിർമ്മിക്കാൻ ആഗ്രഹിക്കുന്നുവെങ്കിൽ, മുകളിലുള്ള കമാൻഡ് തുടർന്ന് `--release` നിങ്ങൾ പ്രവർത്തിപ്പിക്കും. തത്ഫലമായുണ്ടാകുന്ന എക്സിക്യൂട്ടബിൾ നിങ്ങളുടെ സിസ്റ്റത്തിലെ ടാർഗെറ്റ് ഫോൾഡറിൽ ലഭ്യമാകും, കൂടാതെ ഇത് ഉപയോഗിച്ച് പ്രവർത്തിപ്പിക്കാം:
 
 ```sh
-target/debug/rustdesk
+artifacts/target/debug/rustdesk
 ```
 
 അല്ലെങ്കിൽ, നിങ്ങൾ ഒരു റിലീസ് എക്സിക്യൂട്ടബിൾ പ്രവർത്തിപ്പിക്കുകയാണെങ്കിൽ:
 
 ```sh
-target/release/rustdesk
+artifacts/target/release/rustdesk
 ```
 
 RustDesk റിപ്പോസിറ്ററിയുടെ റൂട്ടിൽ നിന്നാണ് നിങ്ങൾ ഈ കമാൻഡുകൾ പ്രവർത്തിപ്പിക്കുന്നതെന്ന് ദയവായി ഉറപ്പാക്കുക, അല്ലാത്തപക്ഷം ആപ്ലിക്കേഷന് ആവശ്യമായ ഉറവിടങ്ങൾ കണ്ടെത്താൻ കഴിഞ്ഞേക്കില്ല. ഹോസ്റ്റിന് പകരം കണ്ടെയ്‌നറിനുള്ളിൽ പ്രോഗ്രാം ഇൻസ്റ്റാൾ ചെയ്യുകയോ പ്രവർത്തിപ്പിക്കുകയോ ചെയ്യുന്നതിനാൽ, `install` അല്ലെങ്കിൽ `run` പോലുള്ള മറ്റ് കാർഗോ സബ്‌കമാൻഡുകൾ നിലവിൽ ഈ രീതിയെ പിന്തുണയ്ക്കുന്നില്ല എന്നതും ശ്രദ്ധിക്കുക.

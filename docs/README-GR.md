@@ -111,9 +111,9 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source $HOME/.cargo/env
 git clone https://github.com/rustdesk/rustdesk
 cd rustdesk
-mkdir -p target/debug
+mkdir -p artifacts/target/debug
 wget https://raw.githubusercontent.com/c-smile/sciter-sdk/master/bin.lnx/x64/libsciter-gtk.so
-mv libsciter-gtk.so target/debug
+mv libsciter-gtk.so artifacts/target/debug
 VCPKG_ROOT=$HOME/vcpkg cargo run
 ```
 
@@ -136,13 +136,13 @@ docker run --rm -it -v $PWD:/home/user/rustdesk -v rustdesk-git-cache:/home/user
 Σημειώστε ότι το πρώτο build μπορεί να διαρκέσει περισσότερο, ώστε να αποθηκευτούν στην προσωρινή μνήμη οι εξαρτήσεις, τα επόμενα build θα είναι ταχύτερα. Επιπλέον, εάν πρέπει να καθορίσετε διαφορετικές παραμέτρους στην εντολή build, μπορείτε να το κάνετε στο τέλος της εντολής με την χρήση `<OPTIONAL-ARGS>`. Για παράδειγμα, εάν επιθυμείτε να δημιουργήσετε μια βελτιστοποιημένη έκδοση της εφαρμογής, θα εκτελέσετε την παραπάνω εντολή ακολουθούμενη από το `--release`. Το εκτελέσιμο αρχείο θα είναι διαθέσιμο στον προκαθορισμένο φάκελο στο σύστημά σας και μπορεί να εκτελεστεί με:
 
 ```sh
-target/debug/rustdesk
+artifacts/target/debug/rustdesk
 ```
 
 Ή στην περίπτωση μιας βελτιστοποιημένης έκδοσης της εφαρμογής εκτελέστε:
 
 ```sh
-target/release/rustdesk
+artifacts/target/release/rustdesk
 ```
 
 Βεβαιωθείτε ότι εκτελείτε αυτές τις εντολές από την αρχική διαδρομή του αποθετηρίου του RustDesk, διαφορετικά η εφαρμογή ενδέχεται να μην είναι σε θέση να βρεί τους απαιτούμενους πόρους. Σημειώστε επίσης ότι άλλες υποεντολές, όπως το `install` ή το `run` δεν υποστηρίζονται επί του παρόντος μέσω αυτής της μεθόδου καθώς θα εγκαταστήσουν ή θα εκτελέσουν το πρόγραμμα εντός του container αντί του κεντρικού υπολογιστή.

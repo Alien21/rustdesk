@@ -7,7 +7,7 @@ This project is mainly derived from <https://github.com/MediaPortal/MediaPortal-
 ## Steps
 
 1. `python preprocess.py`, see `python preprocess.py -h` for help.
-2. Build the .sln solution.
+2. Build the .sln solution. Build products are written to `../../artifacts/msi/bin/` and intermediates to `../../artifacts/msi/obj/`.
 
 Run `msiexec /i package.msi /l*v install.log` to record the log.
 

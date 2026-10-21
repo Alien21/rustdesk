@@ -6,7 +6,7 @@
             "name": "Debug",
             "type": "gdb",
             "request": "launch",
-            "target": "./target/debug/examples/keyboard",
+            "target": "../../artifacts/target/debug/examples/keyboard",
             "cwd": "${workspaceRoot}"
         }
     ]

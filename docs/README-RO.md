@@ -119,9 +119,9 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source $HOME/.cargo/env
 git clone --recurse-submodules https://github.com/rustdesk/rustdesk
 cd rustdesk
-mkdir -p target/debug
+mkdir -p artifacts/target/debug
 wget https://raw.githubusercontent.com/c-smile/sciter-sdk/master/bin.lnx/x64/libsciter-gtk.so
-mv libsciter-gtk.so target/debug
+mv libsciter-gtk.so artifacts/target/debug
 VCPKG_ROOT=$HOME/vcpkg cargo run
 ```
 
@@ -145,13 +145,13 @@ docker run --rm -it -v $PWD:/home/user/rustdesk -v rustdesk-git-cache:/home/user
 Reține că prima construire poate dura mai mult până când dependențele sunt în cache; construirile ulterioare vor fi mai rapide. De asemenea, dacă trebuie să specifici argumente diferite comenzii de build, le poți adăuga la finalul comenzii în poziția `<OPTIONAL-ARGS>`. De exemplu, pentru a construi o versiune optimizată de release, adaugă `--release`. Executabilul rezultat va fi disponibil în folderul `target` pe sistemul tău, și poate fi rulat cu:
 
 ```sh
-target/debug/rustdesk
+artifacts/target/debug/rustdesk
 ```
 
 Sau, dacă rulezi un executabil release:
 
 ```sh
-target/release/rustdesk
+artifacts/target/release/rustdesk
 ```
 
 Asigură-te că rulezi aceste comenzi din rădăcina repository-ului RustDesk, altfel aplicația poate să nu găsească resursele necesare. De asemenea, reține că alte subcomenzi cargo, cum ar fi `install` sau `run`, nu sunt acceptate în prezent prin această metodă, deoarece ar instala sau rula programul în interiorul containerului în loc de gazdă.
