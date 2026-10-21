@@ -1447,7 +1447,7 @@ async fn tcp_proxy_request(
     let overall_timeout = CONNECT_TIMEOUT + READ_TIMEOUT;
     timeout(overall_timeout, async {
         let mut conn = socket_client::connect_tcp(&*tcp_addr, CONNECT_TIMEOUT).await?;
-        let key = crate::get_key(true).await;
+        let key = get_key_with_dns(true).await?;
         secure_tcp_silent(&mut conn, &key).await?;
 
         let mut req = HttpProxyRequest::new();
@@ -2128,6 +2128,41 @@ pub async fn get_key(sync: bool) -> String {
         key = config::RS_PUB_KEY.to_owned();
     }
     key
+}
+
+pub async fn get_key_with_dns(sync: bool) -> ResultType<String> {
+    #[cfg(windows)]
+    if let Ok(lic) = crate::platform::windows::get_license_from_exe_name() {
+        if !lic.key.is_empty() {
+            return Ok(lic.key);
+        }
+    }
+    #[cfg(target_os = "ios")]
+    let (key, server) = (
+        Config::get_option("key"),
+        Config::get_option("custom-rendezvous-server"),
+    );
+    #[cfg(not(target_os = "ios"))]
+    let (key, server) = if sync {
+        (
+            Config::get_option("key"),
+            Config::get_option("custom-rendezvous-server"),
+        )
+    } else {
+        let mut options = crate::ipc::get_options_async().await;
+        (
+            options.remove("key").unwrap_or_default(),
+            options.remove("custom-rendezvous-server").unwrap_or_default(),
+        )
+    };
+    let server = get_custom_rendezvous_server(server);
+    if !key.is_empty() {
+        return Ok(key);
+    }
+    if server.is_empty() {
+        return Ok(config::RS_PUB_KEY.to_owned());
+    }
+    crate::dns_key::resolve(&server, &key).await
 }
 
 pub fn pk_to_fingerprint(pk: Vec<u8>) -> String {

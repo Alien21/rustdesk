@@ -590,7 +590,7 @@ impl RendezvousMediator {
         let host = check_port(&host, RENDEZVOUS_PORT);
         log::info!("start tcp: {}", hbb_common::websocket::check_ws(&host));
         let mut conn = connect_tcp(host.clone(), CONNECT_TIMEOUT).await?;
-        let key = crate::get_key(true).await;
+        let key = crate::get_key_with_dns(true).await?;
         crate::secure_tcp(&mut conn, &key).await?;
         let mut rz = Self {
             addr: conn.local_addr().into_target_addr()?,
@@ -714,7 +714,7 @@ impl RendezvousMediator {
         // controller falls back to its other transports.
         let mut webrtc_sdp_answer = webrtc_sdp_answer;
         if !webrtc_sdp_answer.is_empty() {
-            let key = crate::get_key(true).await;
+            let key = crate::get_key_with_dns(true).await?;
             if let Err(err) = crate::secure_tcp_required(&mut socket, &key).await {
                 log::warn!("relaying without the WebRTC answer, it cannot be encrypted: {err}");
                 webrtc_sdp_answer = String::new();
@@ -929,7 +929,18 @@ impl RendezvousMediator {
                 // trickle, and TCP reliability replaces the old 400ms duplicate re-send
                 // (the controller keeps its own re-send for the server->peer UDP downlink).
                 let mut conn = None;
-                let key = crate::get_key(true).await;
+                let key = match crate::get_key_with_dns(true).await {
+                    Ok(key) => key,
+                    Err(err) => {
+                        hbb_common::throttled_log!(
+                            PUNCH_LOG_INTERVAL,
+                            warn,
+                            "failed to resolve the WebRTC signalling key: {}",
+                            err
+                        );
+                        return;
+                    }
+                };
                 while let Some(candidate) = local_ice_rx.recv().await {
                     let mut msg = Message::new();
                     msg.set_ice_candidate(IceCandidate {
@@ -1158,7 +1169,7 @@ impl RendezvousMediator {
             let mut socket = connect_tcp(&*self.host, CONNECT_TIMEOUT).await?;
             // The answer goes out only on a channel that is actually encrypted; otherwise this
             // WebRTC attempt is abandoned and the controller falls back to its other transports.
-            crate::secure_tcp_required(&mut socket, &crate::get_key(true).await).await?;
+            crate::secure_tcp_required(&mut socket, &crate::get_key_with_dns(true).await?).await?;
             socket.send(&msg_out).await?;
             return Ok(());
         }

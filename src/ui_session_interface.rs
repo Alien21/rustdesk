@@ -1982,7 +1982,23 @@ pub async fn io_loop<T: InvokeUiSession>(handler: Session<T>, round: u32) {
     let (sender, mut receiver) = mpsc::unbounded_channel::<Data>();
     *handler.sender.write().unwrap() = Some(sender.clone());
     let token = LocalConfig::get_option("access_token");
-    let key = crate::get_key(false).await;
+    let needs_own_server_key = {
+        let config = handler.lc.read().unwrap();
+        config.other_server.is_none()
+            && !hbb_common::is_ip_str(config.get_id())
+            && !hbb_common::is_domain_port_str(config.get_id())
+    };
+    let key = if needs_own_server_key {
+        match crate::get_key_with_dns(false).await {
+            Ok(key) => key,
+            Err(err) => {
+                handler.on_error(&err.to_string());
+                return;
+            }
+        }
+    } else {
+        crate::get_key(false).await
+    };
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     if handler.is_port_forward() {
         handler.lc.write().unwrap().port_forward_mux = crate::port_forward::mux_enabled();

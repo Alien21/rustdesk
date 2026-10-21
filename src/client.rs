@@ -470,6 +470,12 @@ impl Client {
         } else {
             (peer, "", key, token)
         };
+        let dns_key = if !other_server.is_empty() && other_server != PUBLIC_SERVER && key.is_empty() {
+            Some(crate::dns_key::resolve(other_server, key).await?)
+        } else {
+            None
+        };
+        let key = dns_key.as_deref().unwrap_or(key);
         let (rendezvous_server, servers, contained) = if other_server.is_empty() {
             crate::get_rendezvous_server(1_000).await
         } else {
@@ -5232,7 +5238,7 @@ async fn hc_connection_(
 
     let host = check_port(&rendezvous_server, RENDEZVOUS_PORT);
     let mut conn = connect_tcp(host.clone(), CONNECT_TIMEOUT).await?;
-    let key = crate::get_key(true).await;
+    let key = crate::get_key_with_dns(true).await?;
     crate::secure_tcp(&mut conn, &key).await?;
     let mut msg_out = RendezvousMessage::new();
     msg_out.set_hc(HealthCheck {
