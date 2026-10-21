@@ -292,9 +292,9 @@ function Build-Server {
     $env:RUSTUP_TOOLCHAIN = "$ServerRust-x86_64-pc-windows-msvc"
     $env:CARGO_TARGET_DIR = Join-Path $StagedServer 'artifacts\target'
     Push-Location $StagedServer
-    try { Invoke-Checked $Rustup @('run', $env:RUSTUP_TOOLCHAIN, 'cargo', 'build', '--locked', '--release', '--bin', 'hbbs', '--bin', 'hbbr') } finally { Pop-Location }
+    try { Invoke-Checked $Rustup @('run', $env:RUSTUP_TOOLCHAIN, 'cargo', 'build', '--locked', '--release', '--bin', 'hbbs', '--bin', 'hbbr', '--bin', 'rustdesk-utils') } finally { Pop-Location }
     $outputs = @()
-    foreach ($name in @('hbbs.exe', 'hbbr.exe')) {
+    foreach ($name in @('hbbs.exe', 'hbbr.exe', 'rustdesk-utils.exe')) {
         $path = Join-Path $env:CARGO_TARGET_DIR "release\$name"
         Require-File $path "The server build did not produce $name."
         if ((Get-Item -LiteralPath $path).Length -eq 0) { throw "Server output is empty: $path" }

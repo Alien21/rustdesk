@@ -312,7 +312,7 @@ PY
         dpkg-deb --info "$package" >/dev/null
         install -m 0644 -- "$package" "$PUBLISH/"
     done
-    for binary in hbbs hbbr; do install -m 0755 -- "$package_dir/bin/$binary" "$PUBLISH/$binary"; done
+    for binary in hbbs hbbr rustdesk-utils; do install -m 0755 -- "$package_dir/bin/$binary" "$PUBLISH/$binary"; done
 }
 
 if [[ "$ONLY" != server ]]; then build_client; fi

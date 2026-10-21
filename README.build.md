@@ -19,8 +19,8 @@ neaktualizují zdrojové repozitáře z internetu.
 
 | Složka pod klientským repozitářem | Obsah |
 | --- | --- |
-| artifacts/publish/windows-x64/ | rustdesk-VERSION-install.exe, hbbs.exe, hbbr.exe |
-| artifacts/publish/linux-x64/ | rustdesk-VERSION.deb, hbbs, hbbr, rustdesk-server-{hbbs,hbbr,utils}_VERSION_amd64.deb |
+| artifacts/publish/windows-x64/ | rustdesk-VERSION-install.exe, hbbs.exe, hbbr.exe, rustdesk-utils.exe |
+| artifacts/publish/linux-x64/ | rustdesk-VERSION.deb, hbbs, hbbr, rustdesk-utils, rustdesk-server-{hbbs,hbbr,utils}_VERSION_amd64.deb |
 | artifacts/build/PLATFORM/ | pracovní kopie zdrojů, bin/obj, Flutter build a balicí mezisoubory |
 | artifacts/cache/PLATFORM/ | izolované SDK, Rust toolchainy, Cargo/Pub/vcpkg a dočasné soubory |
 
@@ -29,6 +29,8 @@ stažení RustDesku; obsahuje instalaci služby. Vlastní build nemá podpis
 vydavatele oficiálního RustDesku. Linuxový klient je balíček pro Debian 13
 amd64. Linuxové serverové binárky i balíčky vznikají v témže Debianu 13.
 Server běží přímo jako hbbs/hbbr nebo přes existující systemd jednotky.
+Serverové sestavení vytváří také samostatnou utilitu rustdesk-utils
+(rustdesk-utils.exe na Windows); vzniká i s volbou --only server.
 
 Pracovní kopie pod artifacts/build se při dalším sestavení vybrané komponenty
 obnovují včetně jejich Rust target adresáře; tato komponenta se překládá znovu.
