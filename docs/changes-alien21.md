@@ -57,3 +57,11 @@ Nové spouštěče a pomocníci buildů pracují s izolovanými kopiemi aktuáln
 - Windows instalační EXE, Linux klient pro Debian 13 amd64 i hbbs/hbbr pro oba systémy jsou sestavené. Linuxový .deb prošel kontrolou metadat, ELF64 AMD64, vlastnictví a oprávnění obou archivů, shody zabalených binárek s hotovou aplikací a dostupnosti knihoven přes ldd. Výsledek je v `artifacts/logs/linux-client-package-verification.json`. Finální balení využilo již hotový bundle přes existující `build.py --package`; jeho SHA-256 se při balení nezměnilo. Instalace finálních GUI klientů tím ověřena není.
 - První soukromá verze používá relay i pro vlastní spojení. Pozvánka dovoluje opakovaná přijetí do vypršení platnosti; expirace/odvolání blokuje nová přijetí, nikoli již přijaté relace. Web tuto nativní funkci nepodporuje.
 - Nový Windows EXE, Debian 13 amd64 klient, Windows/Linux hbbs/hbbr a samostatné utils byly sestaveny v zachovaných pracovních kopiích pod artifacts. SDK, vcpkg a generované FFI se znovu nepřipravovaly; existující Cargo a Flutter cache zůstaly zachované. Konečný manifest všech 11 výstupů s SHA-256 a kontrolami je `artifacts/logs/release-20261021-shared-ports.json`. Instalace aktualizované Windows služby ani celé původní GUI E2E tím ověřeny nejsou.
+
+## Verze a přenosný test Windows
+
+Klient zachovává výchozí upstream `1.5.1` a používá označení `1.5.1-a21`. Cargo.lock mění pouze vlastní dvě verze, nikoli závislosti. Windows instalační/aktualizační registry mají číselnou verzi bez přípony a textovou verzi s příponou. API upozornění už obsahoval upstream; skutečná HTTPS adresa místního API byla ověřena bez změny serveru.
+
+Přenosný test s dočasně vypnutou původní službou potvrdil vlastní backend, zachované ID, odpověď hbbs přes UDP 21116 a vymizení resetů IPC. Původní služba i tray byly obnoveny, nová verze se neinstalovala. Samostatný profil, nové ID ani změna IPC autentizace nejsou součástí opravy.
+
+Regresní plocha úzké opravy nastavení je jediná existující funkce `src/ui_interface.rs::check_super_user_permission`: na Windows nevolá UAC, pokud proces provozuje vlastní backend a jeho EXE není nainstalovaná kopie. Ostatní cesty a platformy zachovávají původní větev. Flutter PIN dialog a ověřování protějšku IPC se nemění.
