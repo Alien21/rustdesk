@@ -171,3 +171,7 @@ Původní instalace může zůstat na disku. Po dobu testu ale musí skončit je
 Při testu 21. 10. 2026 přenosný klient zachoval ID, spustil vlastní IPC/backend a dostal odpověď původního hbbs přes UDP 21116 (latence přibližně 1,7 ms); opakované IPC resety ustaly. Původní služba byla po testu obnovena.
 
 Odemčení síťových a bezpečnostních nastavení zachovává původní kontrolu administrátora Windows (UAC) i případný Unlock PIN. Výjimka pro přenosný backend byla při testu odmítnuta a odstraněna. Zelený stav Ready byl ověřen uživatelem; potíže se stále neaktivními ovládacími prvky po odemčení se ověřují samostatně.
+
+### Běžná instalace a návrat k originálu
+
+Pro další testování byla zvolena běžná instalace klienta včetně jeho služby, s původními kontrolami oprávnění. Postup, umístění zálohy původní verze 1.5.0+68 a ověřeného oficiálního instalátoru pro návrat uvádí [návod pro Windows](windows-installation-alien21.md). Záloha byla dokončena a původní služba obnovena; vlastní instalace ani následné odemčení nastavení zatím ověřeny nejsou.
