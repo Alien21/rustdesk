@@ -64,4 +64,4 @@ Klient zachovává výchozí upstream `1.5.1` a používá označení `1.5.1-a21
 
 Přenosný test s dočasně vypnutou původní službou potvrdil vlastní backend, zachované ID, odpověď hbbs přes UDP 21116 a vymizení resetů IPC. Původní služba i tray byly obnoveny, nová verze se neinstalovala. Samostatný profil, nové ID ani změna IPC autentizace nejsou součástí opravy.
 
-Regresní plocha úzké opravy nastavení je jediná existující funkce `src/ui_interface.rs::check_super_user_permission`: na Windows nevolá UAC, pokud proces provozuje vlastní backend a jeho EXE není nainstalovaná kopie. Ostatní cesty a platformy zachovávají původní větev. Flutter PIN dialog a ověřování protějšku IPC se nemění.
+Výjimka z UAC pro vlastní přenosný backend byla na výslovný požadavek uživatele odstraněna. `src/ui_interface.rs::check_super_user_permission` znovu přesně odpovídá původnímu upstreamu; odemčení nadále vyžaduje původní ověření administrátora a případný PIN. Zelený stav Ready potvrdil uživatel, problém s neaktivními nastaveními po odemčení zatím zůstává otevřený.

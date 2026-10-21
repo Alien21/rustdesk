@@ -1198,11 +1198,6 @@ pub fn is_root() -> bool {
 #[cfg(any(target_os = "android", target_os = "ios", feature = "flutter"))]
 #[inline]
 pub fn check_super_user_permission() -> bool {
-    // The portable backend edits this user's config rather than the installed service.
-    #[cfg(windows)]
-    if crate::common::is_server_running() && !crate::platform::is_cur_exe_the_installed() {
-        return true;
-    }
     #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
     return crate::platform::check_super_user_permission().unwrap_or(false);
     #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]

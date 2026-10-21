@@ -170,4 +170,4 @@ Původní instalace může zůstat na disku. Po dobu testu ale musí skončit je
 
 Při testu 21. 10. 2026 přenosný klient zachoval ID, spustil vlastní IPC/backend a dostal odpověď původního hbbs přes UDP 21116 (latence přibližně 1,7 ms); opakované IPC resety ustaly. Původní služba byla po testu obnovena.
 
-Windows přenosný backend nyní pro odemčení vlastního uživatelského nastavení zbytečně nevyžaduje UAC jen kvůli existenci jiné instalace. Výjimka platí pouze při běhu vlastního backendu mimo instalační EXE; nainstalované GUI dál používá původní kontrolu oprávnění a případný Unlock PIN se ověřuje beze změny.
+Odemčení síťových a bezpečnostních nastavení zachovává původní kontrolu administrátora Windows (UAC) i případný Unlock PIN. Výjimka pro přenosný backend byla při testu odmítnuta a odstraněna. Zelený stav Ready byl ověřen uživatelem; potíže se stále neaktivními ovládacími prvky po odemčení se ověřují samostatně.
