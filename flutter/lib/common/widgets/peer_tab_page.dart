@@ -903,6 +903,9 @@ class _PeerSortDropdownState extends State<PeerSortDropdown> {
                       dense: true, (String? v) async {
                     if (v != null) {
                       peerSort.value = v;
+                      if (v == PeerSortType.lastUsed) {
+                        bind.mainLoadRecentPeers();
+                      }
                       await bind.setLocalFlutterOption(
                         k: kOptionPeerSorting,
                         v: peerSort.value,

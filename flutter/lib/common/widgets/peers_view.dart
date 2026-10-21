@@ -26,13 +26,30 @@ class PeerSortType {
   static const String remoteHost = 'Remote Host';
   static const String username = 'Username';
   static const String status = 'Status';
+  static const String lastUsed = 'Last used';
 
   static List<String> values = [
     PeerSortType.remoteId,
     PeerSortType.remoteHost,
     PeerSortType.username,
-    PeerSortType.status
+    PeerSortType.status,
+    PeerSortType.lastUsed,
   ];
+}
+
+void sortPeersByLastUsed(List<Peer> peers, Iterable<String> recentPeerIds) {
+  final ranks = <String, int>{};
+  for (final id in recentPeerIds) {
+    final trimmedId = id.trim();
+    if (trimmedId.isNotEmpty) {
+      ranks.putIfAbsent(trimmedId, () => ranks.length);
+    }
+  }
+  peers.sort((a, b) {
+    final byLastUsed = (ranks[a.id] ?? ranks.length)
+        .compareTo(ranks[b.id] ?? ranks.length);
+    return byLastUsed != 0 ? byLastUsed : a.getId().compareTo(b.getId());
+  });
 }
 
 class LoadEvent {
@@ -116,14 +133,31 @@ class _PeersViewState extends State<_PeersView>
     windowManager.addListener(this);
     WidgetsBinding.instance.addObserver(this);
     super.initState();
+    if (widget.peerTabIndex != PeerTabIndex.recent) {
+      gFFI.recentPeersModel.addListener(_refreshLastUsedOrder);
+      if (peerSort.value == PeerSortType.lastUsed) {
+        bind.mainLoadRecentPeers();
+      }
+    }
   }
 
   @override
   void dispose() {
     windowManager.removeListener(this);
     WidgetsBinding.instance.removeObserver(this);
+    if (widget.peerTabIndex != PeerTabIndex.recent) {
+      gFFI.recentPeersModel.removeListener(_refreshLastUsedOrder);
+    }
     _exit = true;
     super.dispose();
+  }
+
+  void _refreshLastUsedOrder() {
+    if (mounted &&
+        peerSort.value == PeerSortType.lastUsed &&
+        gFFI.recentPeersModel.event == UpdateEvent.load) {
+      setState(() {});
+    }
   }
 
   @override
@@ -385,6 +419,13 @@ class _PeersViewState extends State<_PeersView>
         case PeerSortType.username:
           peers.sort((p1, p2) =>
               p1.username.toLowerCase().compareTo(p2.username.toLowerCase()));
+          break;
+        case PeerSortType.lastUsed:
+          final recent = gFFI.recentPeersModel;
+          sortPeersByLastUsed(peers, [
+            ...recent.peers.map((peer) => peer.id),
+            ...recent.restPeerIds,
+          ]);
           break;
         case PeerSortType.status:
           peers.sort((p1, p2) => p1.online ? -1 : 1);
