@@ -823,5 +823,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Revoke invitation", "Zrušit pozvánku"),
         ("The invitation expires for new connections. Accepted sessions can continue.", "Platnost pozvánky omezuje nová připojení. Přijaté relace mohou pokračovat."),
         ("Invitation validity must be between 1 and 1440 minutes", "Platnost pozvánky musí být od 1 do 1440 minut"),
+        ("Install or restart the updated RustDesk client service to use private keys and guest invitations", "Pro použití privátního klíče a pozvánek pro hosty nainstalujte aktualizovaného klienta RustDesk včetně jeho služby nebo službu restartujte."),
     ].iter().cloned().collect();
 }

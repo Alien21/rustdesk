@@ -2,6 +2,8 @@ use hbb_common::{anyhow, config::Config, password_security, ResultType};
 use serde_derive::{Deserialize, Serialize};
 use std::{fmt, fs, sync::Mutex};
 
+pub const IPC_CAPABILITY: &str = "server-access-v1";
+
 static STORE_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Default, Serialize, Deserialize)]
@@ -176,7 +178,7 @@ fn save(
 async fn dispatch(request: UiRequest) -> ResultType<serde_json::Value> {
     match request {
         UiRequest::Status => Ok(
-            serde_json::json!({"has_secret": configured(), "enabled": invitations_enabled(), "minutes": invitation_minutes()}),
+            serde_json::json!({"available": true, "has_secret": configured(), "enabled": invitations_enabled(), "minutes": invitation_minutes()}),
         ),
         UiRequest::Save {
             server,
@@ -236,14 +238,24 @@ async fn request(request: IpcRequest) -> ResultType<serde_json::Value> {
     let reply = {
         let mut connection = match crate::ipc::connect(1000, "").await {
             Ok(connection) => connection,
-            Err(_) if matches!(&request, IpcRequest::Credentials(_)) => {
-                if let IpcRequest::Credentials(target) = &request {
-                    return scoped_secret(target).map(|v| serde_json::json!({"secret": v}));
-                }
-                anyhow::bail!("Invalid credential request");
-            }
-            Err(err) => return Err(err),
+            Err(_) => return unsupported_service(&request, configured(), &server()),
         };
+        // Older services understand Config queries and reply None for unknown names.
+        if connection
+            .send(&crate::ipc::Data::Config((IPC_CAPABILITY.to_owned(), None)))
+            .await
+            .is_err()
+        {
+            return unsupported_service(&request, configured(), &server());
+        }
+        let supported = matches!(
+            connection.next_timeout(2_000).await,
+            Ok(Some(crate::ipc::Data::Config((name, Some(version)))))
+                if name == IPC_CAPABILITY && version == "1"
+        );
+        if !supported {
+            return unsupported_service(&request, configured(), &server());
+        }
         connection
             .send(&crate::ipc::Data::ServerAccess(request))
             .await?;
@@ -267,6 +279,20 @@ async fn request(request: IpcRequest) -> ResultType<serde_json::Value> {
             .unwrap_or("Server access request failed")
     );
     Ok(reply.get("value").cloned().unwrap_or_default())
+}
+
+fn unsupported_service(
+    request: &IpcRequest,
+    private_configured: bool,
+    current_server: &str,
+) -> ResultType<serde_json::Value> {
+    match request {
+        IpcRequest::Credentials(target) if !private_configured || !same_server(target, current_server) => Ok(serde_json::json!({"secret": ""})),
+        IpcRequest::Ui(json) if matches!(serde_json::from_str::<UiRequest>(json), Ok(UiRequest::Status)) => {
+            Ok(serde_json::json!({"available": false, "has_secret": false, "enabled": false, "minutes": 10}))
+        }
+        _ => anyhow::bail!("Install or restart the updated RustDesk client service to use private keys and guest invitations"),
+    }
 }
 
 fn scoped_secret(target: &str) -> ResultType<String> {
@@ -331,4 +357,13 @@ mod tests {
         let request = IpcRequest::Ui("sensitive value".into());
         assert_eq!(format!("{request:?}"), "ServerAccess(<redacted>)");
     }
+    #[test]
+    fn old_service_preserves_regular_connections_and_reports_feature_availability() {
+        assert_eq!(unsupported_service(&IpcRequest::Credentials("example.com".into()), false, "example.com").unwrap()["secret"], "");
+        assert!(unsupported_service(&IpcRequest::Credentials("example.com".into()), true, "example.com").is_err());
+        assert_eq!(unsupported_service(&IpcRequest::Credentials("other.example.com".into()), true, "example.com").unwrap()["secret"], "");
+        assert_eq!(unsupported_service(&IpcRequest::Ui(r#"{"action":"status"}"#.into()), false, "example.com").unwrap()["available"], false);
+        assert!(unsupported_service(&IpcRequest::Ui(r#"{"action":"create"}"#.into()), false, "example.com").unwrap_err().to_string().contains("updated RustDesk client service"));
+    }
+
 }

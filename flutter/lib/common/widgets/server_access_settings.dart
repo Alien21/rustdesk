@@ -29,6 +29,7 @@ class ServerAccessSettingsState extends State<ServerAccessSettings> {
   final _secret = TextEditingController();
   final _minutes = TextEditingController(text: '10');
   bool _loaded = false;
+  bool _serviceUnavailable = false;
   bool _hasSecret = false;
   bool _editing = false;
   bool _secretChanged = false;
@@ -48,7 +49,8 @@ class ServerAccessSettingsState extends State<ServerAccessSettings> {
             _secret.text = _hasSecret ? '••••••••••••••••••••' : '';
             _enabled = value['enabled'] == true;
             _minutes.text = (value['minutes'] ?? 10).toString();
-            _loaded = true;
+            _serviceUnavailable = value['available'] == false;
+            _loaded = !_serviceUnavailable;
           });
         })
         .catchError((Object error) {
@@ -200,6 +202,14 @@ class ServerAccessSettingsState extends State<ServerAccessSettings> {
             ),
           ],
         ),
+        if (_serviceUnavailable)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              translate('Install or restart the updated RustDesk client service to use private keys and guest invitations'),
+              style: TextStyle(color: Theme.of(context).hintColor),
+            ),
+          ),
         if (_error != null)
           Padding(
             padding: const EdgeInsets.only(top: 8),

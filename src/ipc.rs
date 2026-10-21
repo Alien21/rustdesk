@@ -941,7 +941,9 @@ async fn handle(data: Data, stream: &mut Connection) {
         Data::Config((name, value)) => match value {
             None => {
                 let value;
-                if name == "id" {
+                if name == crate::access_config::IPC_CAPABILITY {
+                    value = Some("1".to_owned());
+                } else if name == "id" {
                     value = Some(Config::get_id());
                 } else if name == "temporary-password" {
                     value = Some(password::temporary_password());
