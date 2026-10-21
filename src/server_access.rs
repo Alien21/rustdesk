@@ -69,7 +69,7 @@ fn endpoint(server: &str, port: i32) -> ResultType<String> {
         .host_str()
         .context("Private server hostname is missing")?;
     let base = url.port().map(i32::from).unwrap_or(port);
-    let port = u16::try_from(base + 4).context("Private server port is invalid")?;
+    let port = u16::try_from(base).context("Private server port is invalid")?;
     Ok(format!("{host}:{port}"))
 }
 
@@ -81,12 +81,11 @@ async fn open(server: &str, key: &str, port: i32) -> ResultType<(AccessStream, S
         FramedStream::new(&address, None, CONNECT_TIMEOUT).await?
     };
     let local_addr = stream.local_addr();
-    let raw = stream.0.into_inner();
     let key = STANDARD
         .decode(key)
         .context("Invalid private server public key")?;
     let access =
-        hbb_common::timeout(CONNECT_TIMEOUT, access_transport::connect(raw, &key)).await??;
+        hbb_common::timeout(CONNECT_TIMEOUT, access_transport::connect_framed(stream, &key)).await??;
     Ok((access, local_addr))
 }
 
@@ -409,20 +408,23 @@ mod tests {
     }
 
     #[test]
-    fn private_endpoints_use_the_corresponding_extra_port() {
+    fn private_endpoints_use_the_existing_server_port() {
+        assert_eq!(endpoint("example.com", RELAY_PORT).unwrap(), "example.com:21117");
+        assert_eq!(endpoint("example.com:32116", RENDEZVOUS_PORT).unwrap(), "example.com:32116");
         assert_eq!(
             endpoint("example.com", RENDEZVOUS_PORT).unwrap(),
-            "example.com:21120"
+            "example.com:21116"
         );
         assert_eq!(
             endpoint("example.com:21117", RELAY_PORT).unwrap(),
-            "example.com:21121"
+            "example.com:21117"
         );
         assert_eq!(
             endpoint("wss://example.com/ws", RENDEZVOUS_PORT).unwrap(),
-            "example.com:21120"
+            "example.com:21116"
         );
-        assert!(endpoint("example.com:65535", RENDEZVOUS_PORT).is_err());
+        assert_eq!(endpoint("example.com:65535", RENDEZVOUS_PORT).unwrap(), "example.com:65535");
+        assert!(endpoint("example.com:65536", RENDEZVOUS_PORT).is_err());
         assert!(endpoint("http://name:secret@example.com", RENDEZVOUS_PORT).is_err());
     }
 }

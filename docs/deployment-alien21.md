@@ -8,15 +8,15 @@ Používáte bezplatné nativní klienty RustDesk, vlastní OSS servery `hbbs`/`
 
 Oficiální RustDesk Server Pro je placený serverový produkt s webovou konzolí, vlastním API a centrální správou. Jeho HTTP API standardně používá TCP 21114. Stejné číslo portu u vašeho samostatného free API neznamená použití Pro. [Oficiální rozdělení OSS a Pro](https://rustdesk.com/docs/en/self-host/), [funkce a licence Server Pro](https://rustdesk.com/docs/en/self-host/rustdesk-server-pro/).
 
-Naše DNS načítání veřejného Key, Private key/ACCESS_KEY a dočasné pozvánky jsou úpravy tohoto OSS sestavení; licenci Pro nevyžadují. Pokud chcete nejprve jen DNS načítání Key, stačí aktualizovat klienta: server, jeho porty a vaše API mohou zůstat současné. Následující výměna binárek, ACCESS_KEY a TCP 21120/21121 patří až k soukromému přístupu a pozvánkám.
+Naše DNS načítání veřejného Key, Private key/ACCESS_KEY a dočasné pozvánky jsou úpravy tohoto OSS sestavení; licenci Pro nevyžadují. Pokud chcete nejprve jen DNS načítání Key, stačí aktualizovat klienta: server, jeho porty a vaše API mohou zůstat současné. Soukromý přístup a pozvánky vyžadují také oba upravené servery, ale sdílejí stávající TCP 21116/21117 a nevyžadují další otevřené porty.
 
 ## Výchozí stav a pořadí změn
 
 Server je Debian 13.7 amd64, interní adresa `10.30.10.139`, veřejné jméno `rustdesk.home.alien21.com`. Balíčky hbbs/hbbr mají verzi 1.1.14. Jednotky `rustdesk-hbbs.service` a `rustdesk-hbbr.service` jsou v `/lib/systemd/system/`, spouštějí `/usr/bin/hbbs` a `/usr/bin/hbbr` a pracují v `/var/lib/rustdesk-server/`. Nemají EnvironmentFile; prázdné User/Group znamená výchozí root.
 
-Nejprve aktualizujte vlastní klienty. Na Windows proveďte instalaci/aktualizaci z nového EXE, aby novou verzi používala i služba RustDesk. Po zapnutí ACCESS_KEY se neupravené vlastní klienty přestanou registrovat a obecně používat relay; neupravení hosté budou potřebovat platnou pozvánku. První verze soukromých spojení používá vždy relay, proto počítejte s provozem přes server i tam, kde dříve fungovalo P2P.
+Nejprve aktualizujte vlastní klienty. Na Windows proveďte instalaci/aktualizaci z nového EXE, aby novou verzi používala i služba RustDesk. Potom klienta spusťte z aktualizované instalace, například z nabídky Start; GUI a služba musí používat stejnou kopii programu. Po zapnutí ACCESS_KEY se neupravené vlastní klienty přestanou registrovat a obecně používat relay; neupravení hosté budou potřebovat platnou pozvánku. První verze soukromých spojení používá vždy relay, proto počítejte s provozem přes server i tam, kde dříve fungovalo P2P.
 
-Samotné DNS hledání veřejného Key funguje v upraveném klientu i se starým serverem a nepotřebuje nové porty. Ochrana pomocí ACCESS_KEY a pozvánky vyžadují oba upravené servery i nové porty.
+Samotné DNS hledání veřejného Key funguje v upraveném klientu i se starým serverem. Ochrana pomocí ACCESS_KEY a pozvánky vyžadují oba upravené servery; vlastní klienty i neupravení hosté používají stávající porty serveru.
 
 ## Cloudflare DNS
 
@@ -61,7 +61,7 @@ Pro běžné připojení nativních desktopových klientů k OSS serveru zachove
 | TCP a UDP 21116 | registrace, rendezvous a navazování spojení přes hbbs |
 | TCP 21117 | přenos přes relay hbbr |
 
-Současná implementace soukromého řízení navíc používá **TCP 21120 (hbbs)** a **TCP 21121 (hbbr)** dostupné pro vlastní upravené klienty. Dva další porty jsou volbou tohoto protokolu; lze jej přepracovat na sdílení původních portů. Pro současné binárky jsou však při aktivním ACCESS_KEY potřeba. Jsou to porty této úpravy pro Private key a pozvánky, nikoli porty Pro nebo DNS vyhledávání. Neupravený host s platnou pozvánkou používá veřejné TCP 21116/21117; vlastník přitom používá i soukromé porty. Pouhé zapnutí DNS načítání Key žádný nový příchozí port nepotřebuje. [Oficiální minimum portů](https://rustdesk.com/docs/en/self-host/#ports-required).
+Soukromé řízení používá **TCP 21116 (hbbs)** a autentizovaný relay **TCP 21117 (hbbr)**. Neupravený host s platnou pozvánkou používá stejné porty. Upravený klient na začátku pošle jednoznačný rozlišovací rámec v existujícím RustDesk rámování; server podle něj zvolí soukromý transport, zatímco běžné zprávy veřejných klientů zpracuje jejich dosavadní cestou. Soukromý transport ověří podpis serveru a používá šifrované záznamy; PSK se posílá až uvnitř tohoto šifrovaného přihlášení. Rozlišovací rámec sám žádné oprávnění nedává. Pro DNS hledání Key ani pro tento soukromý režim neotvírejte další příchozí porty. [Oficiální minimum portů](https://rustdesk.com/docs/en/self-host/#ports-required).
 
 Ostatní služby posuzujte samostatně:
 
@@ -127,11 +127,11 @@ systemctl daemon-reload
 systemctl restart rustdesk-hbbs.service rustdesk-hbbr.service
 systemctl status rustdesk-hbbs.service rustdesk-hbbr.service --no-pager
 journalctl -u rustdesk-hbbs.service -u rustdesk-hbbr.service -n 80 --no-pager
-ss -lntup | grep -E ':211(15|16|17|18|19|20|21)\b'
+ss -lntup | grep -E ':211(15|16|17|18|19)\b'
 tail -n 40 /var/log/rustdesk-server/hbbs.log /var/log/rustdesk-server/hbbs.error
 ```
 
-Očekávejte nové listenery TCP 21120/21121. Původní jednotky zapisují hlavní logy do `/var/log/rustdesk-server/`, proto kontrolujte i tyto soubory. Soukromý ACCESS_KEY předejte pouze vlastním upraveným klientům. Při další údržbě zálohujte také env soubor a oba drop-in adresáře. Při výměně samotných binárek zůstává verze v databázi dpkg původní; skutečnou ověříte `/usr/bin/hbbs --version` a `/usr/bin/hbbr --version`. Aby aktualizace balíčků nepřepsala vlastní binárky, nastavte `apt-mark hold rustdesk-server-hbbs rustdesk-server-hbbr`; další verze pak nasazujte vlastním sestavením.
+Soukromé i veřejné spojení obsluhují stejné listenery TCP 21116/21117. Původní jednotky zapisují hlavní logy do `/var/log/rustdesk-server/`, proto kontrolujte i tyto soubory. Soukromý ACCESS_KEY předejte pouze vlastním upraveným klientům. Při další údržbě zálohujte také env soubor a oba drop-in adresáře. Při výměně samotných binárek zůstává verze v databázi dpkg původní; skutečnou ověříte `/usr/bin/hbbs --version` a `/usr/bin/hbbr --version`. Aby aktualizace balíčků nepřepsala vlastní binárky, nastavte `apt-mark hold rustdesk-server-hbbs rustdesk-server-hbbr`; další verze pak nasazujte vlastním sestavením.
 
 ## Klienti a pozvánka
 
@@ -148,3 +148,11 @@ Neupravený klient potřebuje `?key=`; neumí toto nové DNS hledání. Base64 v
 Pozvánka je opakovaně použitelná po zvolenou dobu. Expirace či odvolání zabrání přijetí nových spojení, včetně dosud nepotvrzeného požadavku; již přijaté relace pokračují. Po restartu registrace hostitele vytvořte novou pozvánku. Ověřte zvlášť vlastní připojení, stock hosta s platnou pozvánkou a odmítnutí staré pozvánky i anonymního skutečného ID.
 
 Pozvánky potřebují dosažitelné výše uvedené TCP porty serveru; DNS only v Cloudflare ponechá přímé směrování na server, samo však nenahrazuje firewall/NAT. Kvůli tomuto relay režimu není potřeba přesměrovávat veřejné porty na počítač sdílející plochu ani na počítač hosta. Celé připojení z neupraveného veřejného GUI klienta zatím nebylo ověřeno; ověřené jsou parser formátu a serverový protokol.
+
+## Upozornění API a místní služba Windows
+
+Oranžové upozornění na nezabezpečený API server se vztahuje na HTTP/HTTPS adresu samostatného API. Dosavadní klient může při prázdném poli API odvodit HTTP adresu z ID serveru; toto upozornění samo nevypovídá o šifrování soukromého relay transportu ani o správnosti DNS Key. Pro své API používejte jeho skutečnou HTTPS adresu s platným certifikátem. Pokud API nechcete používat, jeho chování je potřeba posoudit odděleně od nastavení ID/relay serveru.
+
+V místním logu klienta se při souběhu nového přenosného EXE a starší nainstalované verze 1.5.0+68 opakovaně odpojuje IPC kanál (`reset by the peer`). Červený stav a heslo „Generating…“ proto nelze považovat za důkaz nedostupnosti hbbs: GUI nedostává stav od místního procesu. Základ klienta navíc při IPC ověřuje shodu spustitelného souboru; tuto ochranu neoslabujeme. Pro funkční celou aplikaci aktualizujte klienta včetně jeho místní služby a ověřte, že GUI i služba používají stejnou instalaci. Samotné spuštění přenosného EXE službu neaktualizuje. Původní hbbs/hbbr mohou při prázdném Private key zůstat beze změny.
+
+Nový dialog se nyní nejprve ptá na podporu přes původní konfigurační IPC zprávu. Starší nebo nedostupná služba tak místo surové chyby v novém ovládání vyvolá srozumitelnou výzvu k aktualizaci/restartu. Dotaz na stav nevolá hbbs. Prázdný Private key zachovává původní síťovou cestu; pokud je soukromý režim již nakonfigurován, nedostupná služba nesmí jeho přihlašovací údaje potichu zahodit. Upravený server bez nastaveného ACCESS_KEY používá původní veřejný režim; s ACCESS_KEY naopak odmítá obecné použití bez PSK a veřejné hosty omezuje na platné pozvánky.
