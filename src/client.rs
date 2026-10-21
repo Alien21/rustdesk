@@ -493,6 +493,20 @@ impl Client {
             }
         };
 
+        if !crate::server_access::is_invitation_id(peer) {
+            let secret = crate::access_config::connection_secret_for(&rendezvous_server).await?;
+            if !secret.is_empty() {
+                let (mut connection, certificate) = crate::server_access::connect_owned(
+                    &rendezvous_server, peer, key, &secret).await?;
+                let peer_key = Self::secure_connection(peer, certificate, key, &mut connection).await?;
+                if !connection.is_secured() {
+                    bail!("Private server sessions require an encrypted peer handshake");
+                }
+                return Ok(((connection, false, peer_key, None, "TCP"),
+                    (0, rendezvous_server), false));
+            }
+        }
+
         // Same relay gate as the v6 socket below: under any forced relay the v6 punch cannot
         // be used, so probing v6 reachability is wasted work on every such connection.
         if crate::get_ipv6_punch_enabled() && !interface.is_force_relay() {

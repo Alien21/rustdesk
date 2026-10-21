@@ -363,6 +363,7 @@ pub enum Data {
     OnlineStatus(Option<(i64, bool)>),
     Config((String, Option<String>)),
     Options(Option<HashMap<String, String>>),
+    ServerAccess(crate::access_config::IpcRequest),
     NatType(Option<i32>),
     ConfirmedKey(Option<(Vec<u8>, Vec<u8>)>),
     RawMessage(Vec<u8>),
@@ -1032,6 +1033,10 @@ async fn handle(data: Data, stream: &mut Connection) {
                 }
             }
         },
+        Data::ServerAccess(request) => {
+            let reply = crate::access_config::handle(request).await;
+            allow_err!(stream.send(&Data::ServerAccess(reply)).await);
+        }
         Data::Options(value) => match value {
             None => {
                 let v = Config::get_options();

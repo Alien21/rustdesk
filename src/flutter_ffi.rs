@@ -33,6 +33,17 @@ use std::{
 
 pub type SessionID = uuid::Uuid;
 
+pub fn main_server_access(command: String) -> String {
+    // FRB executes normal calls on its worker, while Dart awaits the returned Future.
+    match hbb_common::tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+    {
+        Ok(runtime) => runtime.block_on(crate::access_config::ui_request(command)),
+        Err(err) => serde_json::json!({"ok": false, "error": err.to_string()}).to_string(),
+    }
+}
+
 lazy_static::lazy_static! {
     static ref TEXTURE_RENDER_KEY: Arc<AtomicI32> = Arc::new(AtomicI32::new(0));
 }

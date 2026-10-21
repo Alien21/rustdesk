@@ -93,6 +93,10 @@ class CursorShape {
 }
 
 class RustdeskImpl {
+  Future<String> mainServerAccess({required String command, dynamic hint}) async {
+    return jsonEncode({"ok": false, "error": "Guest invitations require the native client"});
+  }
+
   // The core answers through the callback, before callMethod returns.
   Future<CursorShape?> sessionGetCursorShape(
       {required UuidValue sessionId, required String id, dynamic hint}) {

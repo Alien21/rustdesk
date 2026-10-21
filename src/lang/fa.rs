@@ -814,5 +814,12 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("On", "روشن"),
         ("Off", "خاموش"),
         ("Last used", ""),
+        ("Private key", ""),
+        ("Enable guest invitations", ""),
+        ("Invitation validity (minutes)", ""),
+        ("Invite guest", ""),
+        ("Revoke invitation", ""),
+        ("The invitation expires for new connections. Accepted sessions can continue.", ""),
+        ("Invitation validity must be between 1 and 1440 minutes", ""),
     ].iter().cloned().collect();
 }

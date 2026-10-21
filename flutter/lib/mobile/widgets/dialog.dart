@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_hbb/common/widgets/api_server_warning.dart';
+import 'package:flutter_hbb/common/widgets/server_access_settings.dart';
 import 'package:flutter_hbb/common/widgets/setting_widgets.dart';
 import 'package:flutter_hbb/common/widgets/toolbar.dart';
 import 'package:get/get.dart';
@@ -77,6 +78,7 @@ void showServerSettingsWithValue(
   final relayCtrl = TextEditingController(text: serverConfig.relayServer);
   final apiCtrl = TextEditingController(text: serverConfig.apiServer);
   final keyCtrl = TextEditingController(text: serverConfig.key);
+  final accessSettings = GlobalKey<ServerAccessSettingsState>();
 
   RxString idServerMsg = ''.obs;
   RxString relayServerMsg = ''.obs;
@@ -91,6 +93,9 @@ void showServerSettingsWithValue(
 
   dialogManager.show((setState, close, context) {
     Future<bool> submit() async {
+      if (!isWeb && !(accessSettings.currentState?.validate() ?? true)) {
+        return false;
+      }
       setState(() {
         isInProgress = true;
       });
@@ -102,6 +107,9 @@ void showServerSettingsWithValue(
               relayServer: relayCtrl.text.trim(),
               apiServer: apiCtrl.text.trim(),
               key: keyCtrl.text.trim()));
+      if (ret && !isWeb) {
+        ret = await accessSettings.currentState?.save() ?? true;
+      }
       setState(() {
         isInProgress = false;
       });
@@ -191,6 +199,9 @@ void showServerSettingsWithValue(
                   ),
                   SizedBox(height: 8),
                   buildField('Key', keyCtrl, ''),
+                  if (!isWeb) ServerAccessSettings(
+                    key: accessSettings, serverController: idCtrl,
+                  ),
                   if (isInProgress)
                     Padding(
                       padding: EdgeInsets.only(top: 8),

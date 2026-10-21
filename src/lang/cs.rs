@@ -816,5 +816,12 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("api_server_connection_tip", ""),
         ("api_server_empty_tip", ""),
         ("Last used", "Naposledy použité"),
+        ("Private key", "Privátní klíč"),
+        ("Enable guest invitations", "Povolit pozvánky pro hosty"),
+        ("Invitation validity (minutes)", "Platnost pozvánky (minuty)"),
+        ("Invite guest", "Pozvat hosta"),
+        ("Revoke invitation", "Zrušit pozvánku"),
+        ("The invitation expires for new connections. Accepted sessions can continue.", "Platnost pozvánky omezuje nová připojení. Přijaté relace mohou pokračovat."),
+        ("Invitation validity must be between 1 and 1440 minutes", "Platnost pozvánky musí být od 1 do 1440 minut"),
     ].iter().cloned().collect();
 }

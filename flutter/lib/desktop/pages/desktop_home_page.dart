@@ -24,6 +24,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:window_size/window_size.dart' as window_size;
 import '../widgets/button.dart';
+import '../widgets/guest_invitation_button.dart';
 
 class DesktopHomePage extends StatefulWidget {
   const DesktopHomePage({Key? key}) : super(key: key);
@@ -92,6 +93,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       buildTip(context),
       if (!isOutgoingOnly) buildIDBoard(context),
       if (!isOutgoingOnly) buildPasswordBoard(context),
+      if (!isOutgoingOnly && !isWeb) const GuestInvitationButton(),
       FutureBuilder<Widget>(
         future: Future.value(
             Obx(() => buildHelpCards(stateGlobal.updateUrl.value))),

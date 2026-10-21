@@ -816,5 +816,12 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("api_server_connection_tip", "自定义服务器正在使用未加密的 HTTP。请联系管理员启用 HTTPS。"),
         ("api_server_empty_tip", "API 服务器留空时，自定义服务器默认使用 HTTP。请联系管理员启用 HTTPS。"),
         ("Last used", ""),
+        ("Private key", ""),
+        ("Enable guest invitations", ""),
+        ("Invitation validity (minutes)", ""),
+        ("Invite guest", ""),
+        ("Revoke invitation", ""),
+        ("The invitation expires for new connections. Accepted sessions can continue.", ""),
+        ("Invitation validity must be between 1 and 1440 minutes", ""),
     ].iter().cloned().collect();
 }

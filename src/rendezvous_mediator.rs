@@ -46,6 +46,7 @@ fn connection_meta(
     ConnectionMeta {
         control_permissions,
         controlled_context,
+        ..Default::default()
     }
 }
 
@@ -645,6 +646,9 @@ impl RendezvousMediator {
     }
 
     pub async fn start(server: ServerPtr, host: String) -> ResultType<()> {
+        if crate::access_config::configured() {
+            return crate::server_access::run_host(server, host, &SHOULD_EXIT).await;
+        }
         log::info!("start rendezvous mediator of {}", host);
         //If the investment agent type is http or https, then tcp forwarding is enabled.
         if (cfg!(debug_assertions) && option_env!("TEST_TCP").is_some())

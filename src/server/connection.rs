@@ -410,6 +410,7 @@ pub struct Connection {
     server_audit_conn: String,
     server_audit_file: String,
     controlled_context: Option<ControlledContext>,
+    server_access: Option<crate::server_access::SessionContext>,
     lr: LoginRequest,
     // Authentication retries may update credentials, but not the requested session scope.
     // A digest, so no peer-controlled strings are retained.
@@ -532,6 +533,7 @@ impl Connection {
         let super::ConnectionMeta {
             control_permissions,
             controlled_context,
+            server_access,
         } = meta;
         // Android is not supported yet, so we always set control_permissions to None.
         #[cfg(target_os = "android")]
@@ -617,6 +619,7 @@ impl Connection {
             server_audit_conn: "".to_owned(),
             server_audit_file: "".to_owned(),
             controlled_context,
+            server_access,
             lr: Default::default(),
             login_scope: None,
             peer_argb: 0u32,
@@ -1896,6 +1899,12 @@ impl Connection {
         if !self.connect_port_forward_if_needed().await {
             return false;
         }
+        if let Some(context) = self.server_access.as_ref() {
+            if let Err(err) = crate::server_access::validate_admission(context).await {
+                self.send_login_error(err.to_string()).await;
+                return false;
+            }
+        }
         self.authorized = true;
         self.unauthorized_id = None;
         // One-time means gone once it has let a peer in, not once that peer
@@ -2989,7 +2998,10 @@ impl Connection {
                 },
             );
 
-            if !crate::common::is_direct_ip_access(&lr.username) && lr.username != Config::get_id()
+            let expected_id = self.server_access.as_ref()
+                .map(|context| context.identity.clone()).unwrap_or_else(Config::get_id);
+            if lr.username != expected_id && (self.server_access.is_some()
+                || !crate::common::is_direct_ip_access(&lr.username))
             {
                 self.send_login_error(crate::client::LOGIN_MSG_OFFLINE)
                     .await;

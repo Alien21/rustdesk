@@ -90,6 +90,7 @@ type ConnMap = HashMap<i32, ConnInner>;
 pub struct ConnectionMeta {
     pub control_permissions: Option<ControlPermissions>,
     pub controlled_context: Option<ControlledContext>,
+    pub server_access: Option<crate::server_access::SessionContext>,
 }
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
@@ -218,6 +219,8 @@ pub async fn create_tcp_connection(
     meta: ConnectionMeta,
 ) -> ResultType<()> {
     let mut stream = stream;
+    let identity = meta.server_access.as_ref()
+        .map(|context| context.identity.clone()).unwrap_or_else(Config::get_id);
     // The address the connection layer keys on, whitelist and admission alike.
     let addr = hbb_common::try_into_v4(addr);
     let id = server.write().unwrap().get_new_id();
@@ -229,10 +232,14 @@ pub async fn create_tcp_connection(
     // Before the handshake, so its read is bounded too; lifted again at authorization.
     stream.set_max_packet_length(MAX_UNAUTHORIZED_MESSAGE);
     tokio::select! {
-        handshake = identity_handshake(&mut stream, secure) => handshake?,
+        handshake = identity_handshake(&mut stream, secure, &identity) => handshake?,
         _ = unauthorized.evicted() => {
             bail!("evicted to make room for a newer unauthenticated connection");
         }
+    }
+
+    if meta.server_access.is_some() && !stream.is_secured() {
+        bail!("Private server sessions require an encrypted peer handshake");
     }
 
     #[cfg(target_os = "macos")]
@@ -261,7 +268,7 @@ pub async fn create_tcp_connection(
 
 /// Our signed identity goes out and, when `secure`, the controller's reply keys `stream`.
 /// Separate so it can be raced against the connection's eviction.
-async fn identity_handshake(stream: &mut Stream, secure: bool) -> ResultType<()> {
+async fn identity_handshake(stream: &mut Stream, secure: bool, identity: &str) -> ResultType<()> {
     let (sk, pk) = Config::get_key_pair();
     if secure && pk.len() == sign::PUBLICKEYBYTES && sk.len() == sign::SECRETKEYBYTES {
         let mut sk_ = [0u8; sign::SECRETKEYBYTES];
@@ -289,7 +296,7 @@ async fn identity_handshake(stream: &mut Stream, secure: bool) -> ResultType<()>
         msg_out.set_signed_id(SignedId {
             id: sign::sign(
                 &IdPk {
-                    id: Config::get_id(),
+                    id: identity.to_owned(),
                     pk: Bytes::from(our_pk_b.0.to_vec()),
                     dtls_fingerprint,
                     kx_version: advertised,

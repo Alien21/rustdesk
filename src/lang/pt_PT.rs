@@ -816,5 +816,12 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("api_server_connection_tip", "O seu servidor personalizado utiliza HTTP não encriptado. Contacte o seu administrador para ativar o HTTPS."),
         ("api_server_empty_tip", "Com o servidor da API vazio, o seu servidor personalizado utiliza HTTP por predefinição. Contacte o seu administrador para ativar o HTTPS."),
         ("Last used", ""),
+        ("Private key", ""),
+        ("Enable guest invitations", ""),
+        ("Invitation validity (minutes)", ""),
+        ("Invite guest", ""),
+        ("Revoke invitation", ""),
+        ("The invitation expires for new connections. Accepted sessions can continue.", ""),
+        ("Invitation validity must be between 1 and 1440 minutes", ""),
     ].iter().cloned().collect();
 }
