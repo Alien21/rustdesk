@@ -17,6 +17,9 @@ neaktualizují zdrojové repozitáře z internetu.
 
 ## Výsledky
 
+Klient zachovává verzi výchozího upstreamu `1.5.1`; přípona `-a21` označuje tuto
+upravenou sestavu (`1.5.1-a21`). Stejná přípona se používá v názvu EXE i DEB.
+
 | Složka pod klientským repozitářem | Obsah |
 | --- | --- |
 | artifacts/publish/windows-x64/ | rustdesk-VERSION-install.exe, hbbs.exe, hbbr.exe, rustdesk-utils.exe |

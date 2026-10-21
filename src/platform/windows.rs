@@ -1642,7 +1642,8 @@ pub fn install_me(options: &str, path: String, silent: bool, debug: bool) -> Res
     let mut version_major = "0";
     let mut version_minor = "0";
     let mut version_build = "0";
-    let versions: Vec<&str> = crate::VERSION.split(".").collect();
+    let numeric_version = crate::VERSION.split('-').next().unwrap_or(crate::VERSION);
+    let versions: Vec<&str> = numeric_version.split(".").collect();
     if versions.len() > 0 {
         version_major = versions[0];
     }
@@ -1796,7 +1797,7 @@ copy /Y \"{tmp_path}\\Uninstall {app_name}.lnk\" \"{path}\\\"
     ",
         display_icon = shortcut_icon_location.as_deref().unwrap_or(exe.as_str()),
         nested_exe = escape_nested_cmd_ampersands(&exe),
-        version = crate::VERSION.replace("-", "."),
+        version = crate::VERSION,
         build_date = crate::BUILD_DATE,
         after_install = get_after_install(
             &exe,
@@ -3486,7 +3487,8 @@ pub fn update_me(debug: bool) -> ResultType<()> {
     let mut version_major = "0";
     let mut version_minor = "0";
     let mut version_build = "0";
-    let versions: Vec<&str> = crate::VERSION.split(".").collect();
+    let numeric_version = crate::VERSION.split('-').next().unwrap_or(crate::VERSION);
+    let versions: Vec<&str> = numeric_version.split(".").collect();
     if versions.len() > 0 {
         version_major = versions[0];
     }
@@ -3496,7 +3498,7 @@ pub fn update_me(debug: bool) -> ResultType<()> {
     if versions.len() > 2 {
         version_build = versions[2];
     }
-    let version = crate::VERSION.replace("-", ".");
+    let version = crate::VERSION;
     let size = get_directory_size_kb(&path);
     let build_date = crate::BUILD_DATE;
     // Use the icon in the previous installation directory if possible.
