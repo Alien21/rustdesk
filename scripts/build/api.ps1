@@ -161,7 +161,7 @@ function Invoke-ApiWindows {
             $env:TMP = $apiTemp
             Push-Location $ApiSource
             try { Invoke-ApiCommand (Join-Path $ApiSource 'build.bat') } finally { Pop-Location }
-            Assert-ApiFile (Join-Path $apiArtifacts 'publish\windows-amd64\apimain.exe')
+            Assert-ApiFile (Join-Path $apiArtifacts 'publish\windows-amd64\rustdesk-api.exe')
         }
         Write-Host 'API build completed.'
     } finally {

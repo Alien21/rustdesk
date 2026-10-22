@@ -163,7 +163,7 @@ rd_api_build() (
         export DOCS=${DOCS:-false}
         unset GOROOT GOWORK GOFLAGS CGO_CFLAGS CGO_CPPFLAGS CGO_CXXFLAGS CGO_LDFLAGS
         sh "$RD_API_SOURCE/build.sh"
-        [[ -s "$RD_API_ARTIFACTS/publish/linux-amd64/apimain" ]] || fail 'API build did not produce publish/linux-amd64/apimain'
+        [[ -s "$RD_API_ARTIFACTS/publish/linux-amd64/rustdesk-api" ]] || fail 'API build did not produce publish/linux-amd64/rustdesk-api'
     fi
     printf 'APIweb build completed: %s\n' "$publish"
 )
