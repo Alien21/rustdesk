@@ -1,5 +1,19 @@
 # Build outputs
 
+For local Windows/Debian builds, use the shared entrypoints described in
+[README.build.md](../README.build.md). They default to the workspace-level
+`../artifacts/`, with `rustdesk/{cache,build,publish}/`,
+`rustdesk-api/{cache,build,publish}/` and `rustdesk-api-web/{cache,build,publish}/`.
+`--artifacts-root` or `RUSTDESK_ARTIFACTS_DIR` selects the shared root; on this
+machine use `C:/Git/RustDesk/artifacts` (`T:` is an alias). The client and server
+are built from disposable source copies under this root, so their internal
+relative `artifacts/` paths also remain physically inside it. Shared SDKs stay
+in `artifacts/tools/`.
+
+The paths below describe lower-level direct builds and upstream packaging/CI.
+Those keep their existing repository-relative paths; invoking them directly
+can recreate repository-local `artifacts` directories.
+
 Each repository keeps Rust build products in its own `artifacts/target/`, configured in `.cargo/config.toml`. This also applies when Cargo runs inside a child directory. No user or system Cargo setting is changed. `CARGO_TARGET_DIR` and Cargo's `--target-dir` still override this default.
 
 | Output | Location relative to this repository |

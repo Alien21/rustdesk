@@ -7,10 +7,10 @@ platforms=()
 case "$PLATFORM" in all) platforms=(windows linux) ;; *) platforms=("$PLATFORM") ;; esac
 # Check every selected platform before a lengthy build starts.
 for platform in "${platforms[@]}"; do
-    bash "$BUILD_ROOT/build_$platform.sh" --check --only "$ONLY"
+    bash "$BUILD_ROOT/build_$platform.sh" --check --only "$ONLY" --artifacts-root "$ARTIFACTS_ROOT"
 done
 if ((CHECK == 0)); then
     for platform in "${platforms[@]}"; do
-        bash "$BUILD_ROOT/build_$platform.sh" --only "$ONLY"
+        bash "$BUILD_ROOT/build_$platform.sh" --only "$ONLY" --artifacts-root "$ARTIFACTS_ROOT"
     done
 fi

@@ -4,6 +4,9 @@ set -Eeuo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 CLIENT_SOURCE=
 SERVER_SOURCE=
+API_SOURCE=
+APIWEB_SOURCE=
+ARTIFACTS_ROOT=${RUSTDESK_ARTIFACTS_DIR:-}
 ONLY=all
 CHECK=0
 CLIENT_RUST=1.75.0
@@ -17,22 +20,27 @@ FRB_VERSION=1.80.1
 
 usage() {
     cat <<'HELP'
-Usage: linux.sh --client-source DIR --server-source DIR [--check] [--only client|server|all]
+Usage: linux.sh --client-source DIR --server-source DIR [--check] [--only all|client|server|api|apiweb]
+       [--api-source DIR] [--apiweb-source DIR] [--artifacts-root DIR]
 
 Builds natively on Debian 13 amd64. Dependencies are checked before any files
 are written; missing packages are listed with an explicit apt-get command.
-The build uses isolated SDKs, caches and source copies under client/artifacts.
+Builds use isolated SDKs, caches and source copies below the shared artifacts root.
+Component namespaces are rustdesk, rustdesk-api and rustdesk-api-web; api includes APIweb.
 --check only validates the host and sources; it performs no installs or downloads.
 HELP
 }
 fail() { printf 'Error: %s\n' "$*" >&2; exit 2; }
 while (($#)); do
     case "$1" in
-        --client-source|--server-source|--only)
+        --client-source|--server-source|--api-source|--apiweb-source|--artifacts-root|--only)
             (($# >= 2)) || fail "Missing value for $1"
             case "$1" in
                 --client-source) CLIENT_SOURCE=$2 ;;
                 --server-source) SERVER_SOURCE=$2 ;;
+                --api-source) API_SOURCE=$2 ;;
+                --apiweb-source) APIWEB_SOURCE=$2 ;;
+                --artifacts-root) ARTIFACTS_ROOT=$2 ;;
                 --only) ONLY=$2 ;;
             esac
             shift 2 ;;
@@ -41,10 +49,23 @@ while (($#)); do
         *) fail "Unknown argument: $1" ;;
     esac
 done
-[[ "$ONLY" == client || "$ONLY" == server || "$ONLY" == all ]] || fail '--only must be client, server or all'
+[[ "$ONLY" == client || "$ONLY" == server || "$ONLY" == all || "$ONLY" == api || "$ONLY" == apiweb ]] || fail '--only must be all, client, server, api or apiweb'
 [[ -n "$CLIENT_SOURCE" && -d "$CLIENT_SOURCE" ]] || fail '--client-source must name the artifact/source root directory'
-[[ -n "$SERVER_SOURCE" ]] || fail '--server-source must be provided'
 CLIENT_SOURCE=$(cd -- "$CLIENT_SOURCE" && pwd -P)
+ARTIFACTS_ROOT=${ARTIFACTS_ROOT:-$CLIENT_SOURCE/../artifacts}
+ARTIFACTS_ROOT=$(realpath -ms -- "$ARTIFACTS_ROOT")
+[[ "$(realpath -m -- "$ARTIFACTS_ROOT")" == "$ARTIFACTS_ROOT" ]] || fail "Refusing redirected artifact root: $ARTIFACTS_ROOT"
+if [[ "$ONLY" == api || "$ONLY" == apiweb ]]; then
+    . "$SCRIPT_DIR/api.sh"
+    rd_api_preflight "$ONLY" "$API_SOURCE" "$APIWEB_SOURCE" "$CLIENT_SOURCE" "$ARTIFACTS_ROOT"
+    if ((CHECK)); then
+        printf 'Debian 13 amd64 API preflight passed (%s).\n' "$ONLY"
+        exit 0
+    fi
+    rd_api_build
+    exit 0
+fi
+[[ -n "$SERVER_SOURCE" ]] || fail '--server-source must be provided'
 SOURCES=()
 if [[ "$ONLY" != server ]]; then
     [[ -f "$CLIENT_SOURCE/Cargo.toml" && -f "$CLIENT_SOURCE/build.py" ]] || fail 'Client source is not a RustDesk client checkout'
@@ -60,6 +81,10 @@ fi
 . /etc/os-release
 [[ "$ID" == debian && "$VERSION_ID" == 13 ]] || fail 'This preset targets Debian 13 only'
 [[ "$(uname -m)" == x86_64 && "$(dpkg --print-architecture)" == amd64 ]] || fail 'This preset targets x86_64/amd64 only'
+if [[ "$ONLY" == all ]]; then
+    . "$SCRIPT_DIR/api.sh"
+    rd_api_preflight "$ONLY" "$API_SOURCE" "$APIWEB_SOURCE" "$CLIENT_SOURCE" "$ARTIFACTS_ROOT"
+fi
 
 PACKAGES=()
 SECTION=common
@@ -99,11 +124,13 @@ for source in "${SOURCES[@]}"; do
 done
 if ((CHECK)); then
     printf 'Debian 13 amd64 preflight passed (%s).\nClient Rust: %s; server Rust: %s; Flutter: %s; bridge: %s.\n' "$ONLY" "$CLIENT_RUST" "$SERVER_RUST" "$BUILD_FLUTTER" "$FRB_VERSION"
-    printf 'Publish directory: %s/artifacts/publish/linux-x64\n' "$CLIENT_SOURCE"
+    printf 'Publish directory: %s/rustdesk/publish/linux-x64\n' "$ARTIFACTS_ROOT"
     exit 0
 fi
 
-ARTIFACTS="$CLIENT_SOURCE/artifacts"
+if [[ "$ONLY" == all ]]; then rd_api_build; fi
+
+ARTIFACTS="$ARTIFACTS_ROOT/rustdesk"
 CACHE="$ARTIFACTS/cache/linux-x64"
 STAGE="$ARTIFACTS/build/linux-x64"
 PUBLISH="$ARTIFACTS/publish/linux-x64"
@@ -144,7 +171,7 @@ fi
 if [[ "$ONLY" != client ]]; then
     rustup toolchain install "$SERVER_RUST" --profile minimal
 fi
-python3 "$SCRIPT_DIR/stage.py" --client-source "$CLIENT_SOURCE" --server-source "$SERVER_SOURCE" --destination "$STAGE" --only "$ONLY"
+python3 "$SCRIPT_DIR/stage.py" --client-source "$CLIENT_SOURCE" --server-source "$SERVER_SOURCE" --artifacts-root "$ARTIFACTS_ROOT" --destination "$STAGE" --only "$ONLY"
 
 flutter_sdk() {
     local version=$1 sdk="$CACHE/flutter-$1" archive expected info

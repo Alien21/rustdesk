@@ -54,15 +54,24 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--client-source", required=True, type=Path)
     parser.add_argument("--server-source", required=True, type=Path)
+    parser.add_argument("--artifacts-root", type=Path)
     parser.add_argument("--destination", required=True, type=Path)
     parser.add_argument("--only", choices=("all", "client", "server"), default="all")
     args = parser.parse_args()
     client = args.client_source.resolve()
+    artifact_root = args.artifacts_root or Path(os.environ.get("RUSTDESK_ARTIFACTS_DIR", client.parent / "artifacts"))
+    for path in (artifact_root, args.destination):
+        absolute = Path(os.path.abspath(path))
+        for ancestor in (absolute, *absolute.parents):
+            if ancestor.exists() or ancestor.is_symlink():
+                if ancestor.is_symlink() or getattr(ancestor.lstat(), "st_file_attributes", 0) & 0x400:
+                    raise ValueError(f"Artifact path must not be redirected: {ancestor}")
+    artifact_root = artifact_root.resolve()
     destination = args.destination.resolve()
     # Only these two owned, generated locations may be replaced.
-    allowed = {client / "artifacts" / "build" / name for name in ("linux-x64", "windows-x64")}
+    allowed = {artifact_root / "rustdesk" / "build" / name for name in ("linux-x64", "windows-x64")}
     if destination not in allowed:
-        raise ValueError("Destination must be artifacts/build/linux-x64 or artifacts/build/windows-x64 inside the client repository")
+        raise ValueError("Destination must be rustdesk/build/linux-x64 or rustdesk/build/windows-x64 inside the shared artifacts root")
     selected = (("client", client), ("server", args.server_source.resolve()))
     for name, source in selected:
         if args.only not in ("all", name):
@@ -72,6 +81,8 @@ def main():
         # Validate before removing an older build copy.
         git(source, "rev-parse", "--show-toplevel")
         target = destination / name
+        if target == source or source in target.parents or target in source.parents:
+            raise ValueError(f"Build directory overlaps the source checkout: {target}")
         if target.is_symlink() or (target.exists() and target.resolve() != target):
             raise ValueError(f"Build directory must not be a symlink: {target}")
         if target.exists():

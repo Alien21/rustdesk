@@ -1,31 +1,52 @@
 # Sestavení upraveného RustDesku
 
 Skripty v kořeni klientského repozitáře sestavují desktopového klienta i oba
-serverové procesy. Předpokládané rozložení zdrojů:
+serverové procesy, API a jeho webovou administraci. Předpokládané rozložení zdrojů:
 
 ~~~text
 RustDesk/
   rustdesk/          # build_linux.sh, build_windows.sh, build_all.sh
   rustdesk-server/
   hbb_common/
+  rustdesk-api/
+  rustdesk-api-web/
 ~~~
 
 Používá se aktuální obsah pracovních kopií, včetně necommitnutých a nových
 neignorovaných souborů a obsahu inicializovaných submodulů. Umístění serveru
 lze změnit proměnnou prostředí RUSTDESK_SERVER_DIR. Skripty nemění větev ani
-neaktualizují zdrojové repozitáře z internetu.
+neaktualizují zdrojové repozitáře z internetu. Pro API a administraci lze
+zdroje přesměrovat přes RUSTDESK_API_DIR a RUSTDESK_API_WEB_DIR.
+
+## Společné umístění výstupů
+
+Výchozí kořen je `../artifacts` vedle repozitáře klienta. Na tomto počítači
+jde o `C:\Git\RustDesk\artifacts`; disk `T:` je alias téže cesty.
+Pro sjednocení absolutních cest v cache doporučujeme spouštět z `C:`.
+Parametr `--artifacts-root` nebo prostředí `RUSTDESK_ARTIFACTS_DIR` mění tento
+kořen pro všechny komponenty společného buildu. Ve WSL se předává odpovídající
+linuxová cesta, například `/mnt/c/Git/RustDesk/artifacts`.
+
+Podadresáře `rustdesk/`, `rustdesk-api/` a `rustdesk-api-web/` oddělují pracovní
+kopie, cache a hotové výsledky. `tools/` obsahuje již připravená společná SDK.
+Relativní `artifacts` uvnitř izolovaných pracovních kopií se zachovávají podle
+požadavků Cargo, CMake a balicích nástrojů; fyzicky jsou uvnitř hlavního kořene.
+Přímé nižší build příkazy (`cargo`, `build.py`, upstream CI) si ponechávají své
+repozitářové cesty. Pro lokální Windows/Linux sestavení používejte společné
+skripty popsané níže. API a Vite respektují `RUSTDESK_ARTIFACTS_DIR` i při
+samostatném spuštění; bez této proměnné zachovají své cesty pro samostatné CI.
 
 ## Výsledky
 
 Klient zachovává verzi výchozího upstreamu `1.5.1`; přípona `-a21` označuje tuto
 upravenou sestavu (`1.5.1-a21`). Stejná přípona se používá v názvu EXE i DEB.
 
-| Složka pod klientským repozitářem | Obsah |
+| Složka pod hlavním workspace `artifacts/` | Obsah |
 | --- | --- |
-| artifacts/publish/windows-x64/ | rustdesk-VERSION-install.exe, hbbs.exe, hbbr.exe, rustdesk-utils.exe |
-| artifacts/publish/linux-x64/ | rustdesk-VERSION.deb, hbbs, hbbr, rustdesk-utils, rustdesk-server-{hbbs,hbbr,utils}_VERSION_amd64.deb |
-| artifacts/build/PLATFORM/ | pracovní kopie zdrojů, bin/obj, Flutter build a balicí mezisoubory |
-| artifacts/cache/PLATFORM/ | izolované SDK, Rust toolchainy, Cargo/Pub/vcpkg a dočasné soubory |
+| rustdesk/publish/windows-x64/ | rustdesk-VERSION-install.exe, hbbs.exe, hbbr.exe, rustdesk-utils.exe |
+| rustdesk/publish/linux-x64/ | rustdesk-VERSION.deb, hbbs, hbbr, rustdesk-utils, rustdesk-server-{hbbs,hbbr,utils}_VERSION_amd64.deb |
+| rustdesk/build/PLATFORM/ | pracovní kopie zdrojů, bin/obj, Flutter build a balicí mezisoubory |
+| rustdesk/cache/PLATFORM/ | izolované SDK, Rust toolchainy, Cargo/Pub/vcpkg a dočasné soubory |
 
 Windows klient je stejný typ samorozbalovacího instalačního EXE jako běžné
 stažení RustDesku; obsahuje instalaci služby. Vlastní build nemá podpis
@@ -35,12 +56,12 @@ Server běží přímo jako hbbs/hbbr nebo přes existující systemd jednotky.
 Serverové sestavení vytváří také samostatnou utilitu rustdesk-utils
 (rustdesk-utils.exe na Windows); vzniká i s volbou --only server.
 
-Pracovní kopie pod artifacts/build se při dalším sestavení vybrané komponenty
+Pracovní kopie pod artifacts/rustdesk/build se při dalším sestavení vybrané komponenty
 obnovují včetně jejich Rust target adresáře; tato komponenta se překládá znovu.
 Ruční změny dělejte v původních zdrojích. Cache nástrojů, SDK a stažených
 závislostí se zachovávají.
-Všechny vygenerované projektové soubory vznikají uvnitř artifacts; původní
-zdroje zůstávají čisté. Publikované výstupy se nenahrávají ani neinstalují na
+Pracovní kopie a výstupy společného buildu vznikají uvnitř hlavního artifacts.
+Windows npm používá standardní ignorovanou složku node_modules v API-web zdrojích. Publikované výstupy se nenahrávají ani neinstalují na
 běžící RustDesk server.
 
 ## Windows x64
@@ -63,7 +84,7 @@ Systémové předpoklady pro klienta:
 
 Skript inicializuje vývojové prostředí Visual Studia sám. Globální SDK ani
 PATH neupravuje. Rust, Flutter, vcpkg, CMake a Python balíčky si při prvním
-sestavení stáhne do artifacts/cache/windows-x64. Samotný server nevyžaduje
+sestavení stáhne do artifacts/rustdesk/cache/windows-x64. Samotný server nevyžaduje
 Flutter, LLVM ani vcpkg; stále potřebuje C++ nástroje a Windows SDK.
 
 ### Přesný postup pro nový Windows počítač
@@ -80,9 +101,9 @@ winget install --exact --id Python.Python.3.12 --source winget
    vyžádají administrátorské oprávnění a zakážou automatický restart:
 
 ~~~powershell
-New-Item -ItemType Directory -Force artifacts/cache/setup | Out-Null
-Invoke-WebRequest https://aka.ms/vs/17/release/vs_buildtools.exe -OutFile artifacts/cache/setup/vs_buildtools.exe
-Start-Process -FilePath (Resolve-Path artifacts/cache/setup/vs_buildtools.exe) -Verb RunAs -Wait -ArgumentList '--quiet --wait --norestart --nocache --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended --add Microsoft.VisualStudio.Component.VC.CMake.Project'
+New-Item -ItemType Directory -Force ../artifacts/tools/setup | Out-Null
+Invoke-WebRequest https://aka.ms/vs/17/release/vs_buildtools.exe -OutFile ../artifacts/tools/setup/vs_buildtools.exe
+Start-Process -FilePath (Resolve-Path ../artifacts/tools/setup/vs_buildtools.exe) -Verb RunAs -Wait -ArgumentList '--quiet --wait --norestart --nocache --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended --add Microsoft.VisualStudio.Component.VC.CMake.Project'
 ~~~
 
    Pokud instalátor vyžádá restart, dokončete jej před buildem. Alternativou
@@ -98,6 +119,10 @@ Start-Process -FilePath (Resolve-Path artifacts/cache/setup/vs_buildtools.exe) -
    stáhněte LLVM-15.0.6-win64.exe, spusťte jej a ponechte cílový adresář
    C:\Program Files\LLVM. Přidání LLVM do systémového PATH není potřeba.
    Je možné i přenosné rozbalení do artifacts; potom nastavte LIBCLANG_PATH.
+
+Pro výchozí sestavení `all` připravte také Node/npm, Go 1.23.10+ a x64 MinGW
+C kompilátor podle sekce **API a webová administrace** níže. Pro volby
+`--only client` a `--only server` tyto nové API nástroje nejsou potřeba.
 
 5. Otevřete **Git Bash** v adresáři rustdesk (případně Cygwin s dostupnými
    příkazy powershell.exe a cygpath). Ověřte a spusťte sestavení:
@@ -144,7 +169,7 @@ bash build_linux.sh
 Předkontrola vypíše přesný apt-get příkaz pro chybějící systémové balíky.
 Úplný seznam je v scripts/build/debian-packages.txt. Skript sám nespouští
 sudo ani nemění systémové balíky. Rust/Flutter/CMake/vcpkg se připravují
-izolovaně pod artifacts/cache/linux-x64.
+izolovaně pod artifacts/rustdesk/cache/linux-x64.
 Balicí kroky používají fakeroot a normalizují POSIX oprávnění i na Windows
 NTFS disku ve WSL; změna mount nastavení není nutná. Serverové .deb mají
 závislosti na skutečně použitých systémových knihovnách.
@@ -187,14 +212,14 @@ Pokud příkaz vyžádá restart, restartujte Windows a pokračujte dalším př
 Z kořene klientského repozitáře poté:
 
 ~~~powershell
-wsl --install --distribution Debian --web-download --no-launch --location "$PWD/artifacts/wsl/Debian"
+wsl --install --distribution Debian --web-download --no-launch --location "$PWD/../artifacts/wsl/Debian"
 wsl --distribution Debian --user root --exec cat /etc/os-release
 ~~~
 
 Výstup musí obsahovat VERSION_ID="13". Spusťte Debian z nabídky Start a dokončete
 případné vytvoření uživatele. V Debianu přejděte do zdrojů, například
 cd /mnt/c/Git/RustDesk/rustdesk, a nainstalujte balíky příkazy výše.
-Pak můžete build spouštět i z Windows Bashe. Distribuce WSL je uložena pod
+Pak můžete build spouštět i z Windows Bashe. Distribuce WSL je uložena pod hlavním workspace
 artifacts/wsl/Debian; pokud už funkční Debian 13 ve WSL máte, použijte jej
 bez další instalace a nastavte RUSTDESK_WSL_DISTRO na jeho název.
 
@@ -206,13 +231,49 @@ bash build_linux.sh --only server
 bash build_all.sh --check
 bash build_all.sh
 bash build_all.sh --platform linux --only client
+bash build_all.sh --only api
+bash build_windows.sh --only apiweb
 ~~~
 
-build_all.sh znamená Windows x64 + Debian 13 amd64. Nejprve zkontroluje obě
+build_all.sh znamená Windows x64 + Debian 13 amd64 včetně API a webové administrace. Nejprve zkontroluje obě
 prostředí a až potom začne sestavovat. Oba cíle lze takto sestavit na Windows
 s připraveným WSL. Nativní Linux sám Windows Flutter klienta nesestaví;
 použijte --platform linux nebo Windows build spusťte na Windows.
 macOS, mobilní klienti a další architektury do tohoto „all“ nepatří.
+
+## API a webová administrace
+
+Volba `--only api` nejprve sestaví administraci pomocí `npm ci` a `npm run build`
+a potom spustí existující build API. `--only apiweb` sestaví pouze administraci.
+Výchozí `all` zahrnuje klienta, server, API i web. Původní volby `client` a `server`
+sestavují pouze vybranou původní komponentu.
+
+Výsledky společných skriptů jsou pod hlavním workspace `artifacts/`:
+
+| Repozitář | Výstup |
+| --- | --- |
+| rustdesk-api-web | rustdesk-api-web/publish/web/ |
+| rustdesk-api | rustdesk-api/publish/windows-amd64/ nebo rustdesk-api/publish/linux-amd64/ |
+
+API balík už obsahuje právě sestavenou administraci v `resources/admin/`.
+Samostatné API/web sestavení nepotřebuje Rust, Flutter ani Visual Studio.
+Windows používá Node/npm z PATH, Go 1.23.10+ z PATH/GOROOT nebo z existující
+cache `artifacts/rustdesk-api/cache/go-toolchain/go/` a x64 MinGW kompilátor
+přes CC, PATH nebo připravený workspace llvm-mingw. Doporučený Node je 22 LTS.
+Na Linuxu se připnuté Node 22.17.0 a Go 1.23.10 podle potřeby stáhnou a ověří
+SHA-256 pouze do artifacts; systémové předpoklady zahrnují curl, tar a pro
+backend gcc. Linuxové npm závislosti mají vlastní pracovní kopii, takže se
+nemíchají s Windows `node_modules`.
+`--check` zkontroluje předpoklady a zdroje bez kompilace a stahování; u SDK,
+které si build umí připravit, pouze ohlásí chybějící cache. Podrobnosti jsou
+v pomocnících `scripts/build/api.ps1` a `scripts/build/api.sh` a v
+`../rustdesk-api/README.build.md`.
+
+~~~bash
+bash build_windows.sh --check --only api
+bash build_windows.sh --only api
+bash build_linux.sh --only api
+~~~
 
 ## Připnuté nástroje
 
@@ -235,3 +296,10 @@ LF pro Bash a seznam Debian balíků v .gitattributes. README.md odkazuje na ten
 nemění chování; nové skripty je používají až při výslovném spuštění.
 
 Instalační parametry vycházejí z [Microsoft Build Tools](https://learn.microsoft.com/en-us/visualstudio/install/use-command-line-parameters-to-install-visual-studio?view=visualstudio) a [dokumentace WSL](https://learn.microsoft.com/en-us/windows/wsl/install).
+
+Rozšíření API a společný kořen mění předání cest v `build_windows.sh` a `build_linux.sh`,
+volby a výchozí zdroje v `scripts/build/common.sh`, předání kořene v `build_all.sh`,
+allowlist cíle kopírování v `scripts/build/stage.py` a podmíněné spouštění
+nových API pomocníků v `scripts/build/windows.ps1` a `scripts/build/linux.sh`.
+Tyto změny jsou potřebné pro nové volby api/apiweb a jejich zahrnutí do all;
+původní klientské a serverové kompilace zůstávají ve svých dosavadních větvích.

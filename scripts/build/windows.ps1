@@ -2,14 +2,18 @@
 param(
     [Parameter(Mandatory = $true)][string]$ClientSource,
     [Parameter(Mandatory = $true)][string]$ServerSource,
+    [string]$ApiSource,
+    [string]$ApiWebSource,
+    [string]$ArtifactsRoot = $env:RUSTDESK_ARTIFACTS_DIR,
     [switch]$Check,
-    [ValidateSet('client', 'server', 'all')][string]$Only = 'all'
+    [ValidateSet('client', 'server', 'api', 'apiweb', 'all')][string]$Only = 'all'
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
-$NeedsClient = $Only -ne 'server'
-$NeedsServer = $Only -ne 'client'
+$NeedsClient = $Only -in @('client', 'all')
+$NeedsServer = $Only -in @('server', 'all')
+$NeedsApiWeb = $Only -in @('api', 'apiweb', 'all')
 $ClientRust = '1.75.0'
 $ServerRust = '1.99.1'
 $VcpkgCommit = '9e593bb18ea69cc5095e012465dcd675a822ed0d'
@@ -56,8 +60,8 @@ function Require-File {
 function Assert-ArtifactPath {
     param([string]$Path)
     $absolute = [IO.Path]::GetFullPath($Path)
-    $artifactRoot = [IO.Path]::GetFullPath($Artifacts).TrimEnd('\')
-    $prefix = $artifactRoot + '\'
+    $artifactRoot = [IO.Path]::GetFullPath($ArtifactsRoot).TrimEnd('\')
+    $prefix = [IO.Path]::GetFullPath($Artifacts).TrimEnd('\') + '\'
     if (-not $absolute.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) { throw "Build path is outside artifacts: $absolute" }
     # A redirected parent could otherwise move a lexically safe deletion outside artifacts.
     $ancestor = $absolute
@@ -306,7 +310,19 @@ try {
     if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT -or -not [Environment]::Is64BitProcess -or [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -ne 'X64') { throw 'Run this build in native x64 Windows PowerShell. Linux/WSL cannot build the Windows Flutter installer.' }
     $ClientSource = [IO.Path]::GetFullPath($ClientSource)
     $ServerSource = [IO.Path]::GetFullPath($ServerSource)
-    $Artifacts = Join-Path $ClientSource 'artifacts'
+    if (-not $ArtifactsRoot) { $ArtifactsRoot = Join-Path (Split-Path $ClientSource -Parent) 'artifacts' }
+    $ArtifactsRoot = [IO.Path]::GetFullPath($ArtifactsRoot)
+    if ($NeedsApiWeb) {
+        if (-not $ApiSource) { $ApiSource = Join-Path (Split-Path $ClientSource -Parent) 'rustdesk-api' }
+        if (-not $ApiWebSource) { $ApiWebSource = Join-Path (Split-Path $ClientSource -Parent) 'rustdesk-api-web' }
+        . (Join-Path $PSScriptRoot 'api.ps1')
+        if (-not ($NeedsClient -or $NeedsServer)) {
+            Invoke-ApiWindows -ApiSource $ApiSource -ApiWebSource $ApiWebSource -ArtifactsRoot $ArtifactsRoot -WebOnly:($Only -eq 'apiweb') -Check:$Check
+            exit 0
+        }
+        Invoke-ApiWindows -ApiSource $ApiSource -ApiWebSource $ApiWebSource -ArtifactsRoot $ArtifactsRoot -Check
+    }
+    $Artifacts = Join-Path $ArtifactsRoot 'rustdesk'
     $Cache = Join-Path $Artifacts 'cache\windows-x64'
     $Downloads = Join-Path $Cache 'downloads'
     $Stage = Join-Path $Artifacts 'build\windows-x64'
@@ -340,7 +356,7 @@ try {
     Write-Host "Build: $Stage"
     Write-Host "Publish: $Publish"
     if ($Check) {
-        Write-Host 'Prerequisites passed. Rust/Flutter/vcpkg/CMake/Python packages will be prepared only inside artifacts/cache/windows-x64 during a build.'
+        Write-Host "Prerequisites passed. Rust/Flutter/vcpkg/CMake/Python packages will be prepared only inside $Cache during a build."
         exit 0
     }
     New-Item -ItemType Directory -Path $Cache, $Downloads -Force | Out-Null
@@ -359,7 +375,7 @@ try {
     $env:CXX = 'cl.exe'
     Remove-Item Env:CARGO_BUILD_TARGET -ErrorAction SilentlyContinue
     New-Item -ItemType Directory -Path $env:TEMP, $env:CARGO_HOME, $env:RUSTUP_HOME, $env:PUB_CACHE -Force | Out-Null
-    Invoke-Checked $Python @((Join-Path $ClientSource 'scripts\build\stage.py'), '--client-source', $ClientSource, '--server-source', $ServerSource, '--destination', $Stage, '--only', $Only)
+    Invoke-Checked $Python @((Join-Path $ClientSource 'scripts\build\stage.py'), '--client-source', $ClientSource, '--server-source', $ServerSource, '--artifacts-root', $ArtifactsRoot, '--destination', $Stage, '--only', $Only)
     Initialize-GitConfiguration
     $Rustup = Initialize-Rust
     $outputs = @()
@@ -369,6 +385,7 @@ try {
         $outputs += Build-Client $tools
     }
     if ($NeedsServer) { $outputs += Build-Server }
+    if ($NeedsApiWeb) { Invoke-ApiWindows -ApiSource $ApiSource -ApiWebSource $ApiWebSource -ArtifactsRoot $ArtifactsRoot }
     # Publish only after every selected component has completed successfully.
     $pending = Assert-ArtifactPath (Join-Path $Artifacts ('publish\.windows-x64-' + [Guid]::NewGuid().ToString('N')))
     New-Item -ItemType Directory -Path $pending -Force | Out-Null

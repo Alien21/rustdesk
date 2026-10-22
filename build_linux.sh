@@ -3,7 +3,7 @@ set -euo pipefail
 _BUILD_ALL=0
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/scripts/build/common.sh"
 parse_options "$@"
-args=(--client-source "$BUILD_ROOT" --server-source "$SERVER_ROOT" --only "$ONLY")
+args=(--client-source "$BUILD_ROOT" --server-source "$SERVER_ROOT" --api-source "$API_ROOT" --apiweb-source "$APIWEB_ROOT" --artifacts-root "$ARTIFACTS_ROOT" --only "$ONLY")
 ((CHECK == 0)) || args+=(--check)
 if is_windows; then
     require_command wsl.exe
@@ -20,7 +20,10 @@ if is_windows; then
     }
     linux_root=$(wsl_path "$BUILD_ROOT")
     linux_server=$(wsl_path "$SERVER_ROOT")
-    args=(--client-source "$linux_root" --server-source "$linux_server" --only "$ONLY")
+    linux_api=$(wsl_path "$API_ROOT")
+    linux_apiweb=$(wsl_path "$APIWEB_ROOT")
+    linux_artifacts=$(wsl_path "$ARTIFACTS_ROOT")
+    args=(--client-source "$linux_root" --server-source "$linux_server" --api-source "$linux_api" --apiweb-source "$linux_apiweb" --artifacts-root "$linux_artifacts" --only "$ONLY")
     ((CHECK == 0)) || args+=(--check)
     MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' wsl.exe --distribution "$distro" --exec bash "$linux_root/scripts/build/linux.sh" "${args[@]}"
 elif [[ "$(uname -s)" == Linux ]]; then
