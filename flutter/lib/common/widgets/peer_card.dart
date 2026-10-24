@@ -19,7 +19,7 @@ import 'dart:math' as math;
 typedef PopupMenuEntryBuilder = Future<List<mod_menu.PopupMenuEntry<String>>>
     Function(BuildContext);
 
-enum PeerUiType { grid, tile, list }
+enum PeerUiType { grid, tile, list, wideTile }
 
 final peerCardUiType = PeerUiType.grid.obs;
 

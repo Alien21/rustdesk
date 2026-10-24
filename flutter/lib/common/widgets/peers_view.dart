@@ -290,7 +290,11 @@ class _PeersViewState extends State<_PeersView>
                           ? SizedBox(
                               width: 220, height: 140, child: visibilityChild)
                           : SizedBox(
-                              width: 220, height: 42, child: visibilityChild))
+                              width: peerCardUiType.value == PeerUiType.wideTile
+                                  ? 320
+                                  : 220,
+                              height: 42,
+                              child: visibilityChild))
                   : Container(child: visibilityChild);
             }
 

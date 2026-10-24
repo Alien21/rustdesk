@@ -82,7 +82,9 @@ class _PeerTabPageState extends State<PeerTabPage>
           ? PeerUiType.grid
           : int.parse(uiType) == 1
               ? PeerUiType.tile
-              : PeerUiType.list;
+              : int.parse(uiType) == 3
+                  ? PeerUiType.wideTile
+                  : PeerUiType.list;
     }
     hideAbTagsPanel.value =
         bind.mainGetLocalOption(key: kOptionHideAbTagsPanel) == 'Y';
@@ -778,6 +780,7 @@ class _PeerViewDropdownState extends State<PeerViewDropdown> {
   Widget build(BuildContext context) {
     final List<PeerUiType> types = [
       PeerUiType.grid,
+      PeerUiType.wideTile,
       PeerUiType.tile,
       PeerUiType.list
     ];
@@ -790,7 +793,7 @@ class _PeerViewDropdownState extends State<PeerViewDropdown> {
         height: 36,
         enabled: false,
         child: Text(translate("Change view"), style: style)));
-    for (var e in PeerUiType.values) {
+    for (var e in types) {
       items.add(PopupMenuItem(
           height: 36,
           child: Obx(() => Center(
@@ -798,17 +801,21 @@ class _PeerViewDropdownState extends State<PeerViewDropdown> {
                   height: 36,
                   child: getRadio<PeerUiType>(
                       Tooltip(
-                          message: translate(types.indexOf(e) == 0
-                              ? 'Big tiles'
-                              : types.indexOf(e) == 1
-                                  ? 'Small tiles'
-                                  : 'List'),
+                          message: e == PeerUiType.wideTile
+                              ? '${translate('Small tiles')} ↔'
+                              : translate(e == PeerUiType.grid
+                                  ? 'Big tiles'
+                                  : e == PeerUiType.tile
+                                      ? 'Small tiles'
+                                      : 'List'),
                           child: Icon(
                             e == PeerUiType.grid
                                 ? Icons.grid_view_rounded
                                 : e == PeerUiType.list
                                     ? Icons.view_list_rounded
-                                    : Icons.view_agenda_rounded,
+                                    : e == PeerUiType.wideTile
+                                        ? Icons.view_stream_rounded
+                                        : Icons.view_agenda_rounded,
                             size: 18,
                           )),
                       e,
@@ -842,7 +849,9 @@ class _PeerViewDropdownState extends State<PeerViewDropdown> {
               ? Icons.grid_view_rounded
               : peerCardUiType.value == PeerUiType.list
                   ? Icons.view_list_rounded
-                  : Icons.view_agenda_rounded,
+                  : peerCardUiType.value == PeerUiType.wideTile
+                      ? Icons.view_stream_rounded
+                      : Icons.view_agenda_rounded,
           size: 18,
         ),
         onTapDown: (details) {
