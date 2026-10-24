@@ -2,8 +2,11 @@ use hbb_common::{
     anyhow::{anyhow, Context},
     bail,
     bytes::BytesMut,
+    bytes_codec::BytesCodec,
     futures::SinkExt,
-    tcp::{DynTcpStream, FramedStream},
+    protobuf::Message,
+    rendezvous_proto::{rendezvous_message, KxParams, RendezvousMessage},
+    tcp::{DynTcpStream, FramedStream, KX_PARAMS_DOMAIN},
     sodiumoxide::{
         base64,
         crypto::{box_, hash::sha256, secretbox, sign},
@@ -13,6 +16,7 @@ use hbb_common::{
         self,
         io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, DuplexStream, ReadBuf},
     },
+    tokio_util::codec::Decoder,
     ResultType,
 };
 use serde::{de::DeserializeOwned, Serialize};
@@ -101,7 +105,59 @@ pub async fn connect_framed(
         bail!("private access upgrade must precede legacy encryption");
     }
     stream.send_raw(UPGRADE.to_vec()).await?;
-    connect_raw(into_buffered(stream).await?, server_key).await
+    let stream = optional_rendezvous_greeting(into_buffered(stream).await?, server_key).await?;
+    connect_raw(stream, server_key).await
+}
+
+async fn optional_rendezvous_greeting<S: AsyncRead + Unpin>(
+    mut stream: BufferedIo<S>,
+    server_key: &[u8],
+) -> ResultType<BufferedIo<S>> {
+    let first = stream.read_u8().await?;
+    // A bounded big-endian access Hello starts with zero; a nonempty framed greeting never does.
+    if first != 0 {
+        let mut codec = BytesCodec::new();
+        codec.set_max_packet_length(HANDSHAKE_MAX);
+        let mut buffered = BytesMut::from(&[first][..]);
+        let greeting = loop {
+            if let Some(bytes) = codec.decode(&mut buffered)? {
+                break bytes;
+            }
+            if stream.read_buf(&mut buffered).await? == 0 {
+                bail!("incomplete rendezvous greeting");
+            }
+        };
+        let message = RendezvousMessage::parse_from_bytes(&greeting)?;
+        let Some(rendezvous_message::Union::KeyExchange(exchange)) = message.union else {
+            bail!("unexpected rendezvous greeting");
+        };
+        if exchange.version != 1 || exchange.keys.len() != 1 {
+            bail!("invalid rendezvous key exchange");
+        }
+        let server_key = sign::PublicKey::from_slice(server_key)
+            .context("invalid server signing key")?;
+        let public_key = sign::verify(&exchange.keys[0], &server_key)
+            .map_err(|_| anyhow!("rendezvous greeting signature mismatch"))?;
+        if public_key.len() != box_::PUBLICKEYBYTES || public_key[31] & 0x80 == 0 {
+            bail!("invalid rendezvous exchange key");
+        }
+        let signed_params = sign::verify(&exchange.signed_params, &server_key)
+            .map_err(|_| anyhow!("rendezvous parameters signature mismatch"))?;
+        let params = KxParams::parse_from_bytes(signed_params.strip_prefix(KX_PARAMS_DOMAIN)
+            .context("invalid rendezvous parameters domain")?)?;
+        if params.version != exchange.version || params.pk[..] != public_key[..] {
+            bail!("rendezvous parameters do not match the greeting");
+        }
+        buffered.extend_from_slice(&stream.prefix);
+        stream.prefix = buffered;
+        if stream.read_u8().await? != 0 {
+            bail!("expected access Hello after rendezvous greeting");
+        }
+    }
+    let mut prefix = BytesMut::from(&[0][..]);
+    prefix.extend_from_slice(&stream.prefix);
+    stream.prefix = prefix;
+    Ok(stream)
 }
 
 #[derive(serde_derive::Serialize, serde_derive::Deserialize)]
@@ -388,6 +444,95 @@ mod tests {
         tokio::net::TcpStream,
         tokio_util::codec::Encoder,
     };
+
+    fn rendezvous_greeting(secret: &sign::SecretKey) -> RendezvousMessage {
+        let (mut public, _) = box_::gen_keypair();
+        public.0[31] |= 0x80;
+        let params = KxParams { pk: public.0.to_vec().into(), version: 1, ..Default::default() };
+        let mut signed = KX_PARAMS_DOMAIN.to_vec();
+        signed.extend_from_slice(&params.write_to_bytes().unwrap());
+        let mut message = RendezvousMessage::new();
+        message.set_key_exchange(hbb_common::rendezvous_proto::KeyExchange {
+            keys: vec![sign::sign(&public.0, secret).into()], version: 1,
+            signed_params: sign::sign(&signed, secret).into(), ..Default::default()
+        });
+        message
+    }
+
+    fn greeting_frame(message: &RendezvousMessage) -> BytesMut {
+        let mut frame = BytesMut::new();
+        BytesCodec::new().encode(Bytes::from(message.write_to_bytes().unwrap()), &mut frame).unwrap();
+        frame
+    }
+
+    #[tokio::test]
+    async fn private_connection_accepts_fragmented_rendezvous_greeting() {
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            let (public, secret) = sign::gen_keypair();
+            let (mut remote, local) = tokio::io::duplex(4096);
+            let server = tokio::spawn(async move {
+                let frame = greeting_frame(&rendezvous_greeting(&secret));
+                remote.write_all(&frame[..1]).await.unwrap();
+                tokio::task::yield_now().await;
+                remote.write_all(&frame[1..]).await.unwrap();
+                let address = SocketAddr::from(([127, 0, 0, 1], 1));
+                let mut framed = FramedStream::from(remote, address);
+                assert!(is_upgrade(&framed.next().await.unwrap().unwrap()));
+                let mut access = accept_framed(framed, &secret).await.unwrap();
+                let request: serde_json::Value = recv_json(&mut access).await.unwrap();
+                assert_eq!(request["op"], "private-auth");
+                send_json(&mut access, &serde_json::json!({"ok":true})).await.unwrap();
+            });
+            let mut access = connect(local, &public.0).await.unwrap();
+            send_json(&mut access, &serde_json::json!({"op":"private-auth"})).await.unwrap();
+            let reply: serde_json::Value = recv_json(&mut access).await.unwrap();
+            assert_eq!(reply["ok"], true);
+            server.await.unwrap();
+        }).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn rendezvous_greeting_preserves_buffered_access_hello() {
+        let (public, secret) = sign::gen_keypair();
+        for greeting in [false, true] {
+            let mut prefix = if greeting { greeting_frame(&rendezvous_greeting(&secret)) } else { BytesMut::new() };
+            let hello = br#"{"ok":true}"#;
+            prefix.extend_from_slice(&(hello.len() as u32).to_be_bytes());
+            prefix.extend_from_slice(hello);
+            prefix.extend_from_slice(b"tail");
+            let raw: &[u8] = &[];
+            let mut stream = optional_rendezvous_greeting(BufferedIo { stream: raw, prefix }, &public.0).await.unwrap();
+            let hello: serde_json::Value = read_json(&mut stream, HANDSHAKE_MAX).await.unwrap();
+            assert_eq!(hello["ok"], true);
+            let mut tail = [0; 4];
+            stream.read_exact(&mut tail).await.unwrap();
+            assert_eq!(&tail, b"tail");
+        }
+    }
+
+    #[tokio::test]
+    async fn rendezvous_greeting_rejects_invalid_or_repeated_offers() {
+        let (public, secret) = sign::gen_keypair();
+        for case in ["signature", "version", "params", "duplicate", "truncated", "oversized"] {
+            let mut message = rendezvous_greeting(&secret);
+            let exchange = message.mut_key_exchange();
+            match case {
+                "signature" => { let mut signed = exchange.keys[0].to_vec(); signed[0] ^= 1; exchange.keys[0] = signed.into(); }
+                "version" => exchange.version = 0,
+                "params" => exchange.signed_params.clear(),
+                _ => {}
+            }
+            let mut frame = greeting_frame(&message);
+            if case == "duplicate" { frame.extend_from_slice(&greeting_frame(&message)); }
+            if case == "truncated" { frame.truncate(frame.len() - 1); }
+            if case == "oversized" {
+                frame.clear();
+                BytesCodec::new().encode(Bytes::from(vec![0; HANDSHAKE_MAX + 1]), &mut frame).unwrap();
+            } else if case != "truncated" { frame.extend_from_slice(&[0, 0, 0, 2, b'{', b'}']); }
+            let raw: &[u8] = &[];
+            assert!(optional_rendezvous_greeting(BufferedIo { stream: raw, prefix: frame }, &public.0).await.is_err(), "{case}");
+        }
+    }
 
     #[tokio::test]
     async fn large_bidirectional_stream_delivers_final_reply_before_drop() {
