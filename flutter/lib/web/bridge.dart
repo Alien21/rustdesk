@@ -1838,6 +1838,10 @@ class RustdeskImpl {
     throw UnimplementedError("mainRemoveTrustedDevices");
   }
 
+  Future<void> mainRenewTrustedDevices({required String json, dynamic hint}) {
+    throw UnimplementedError("mainRenewTrustedDevices");
+  }
+
   Future<void> mainClearTrustedDevices({dynamic hint}) {
     throw UnimplementedError("mainClearTrustedDevices");
   }
