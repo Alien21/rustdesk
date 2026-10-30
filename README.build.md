@@ -27,8 +27,10 @@ Parametr `--artifacts-root` nebo prostředí `RUSTDESK_ARTIFACTS_DIR` mění ten
 kořen pro všechny komponenty společného buildu. Ve WSL se předává odpovídající
 linuxová cesta, například `/mnt/c/Git/RustDesk/artifacts`.
 
-Podadresáře `rustdesk/`, `rustdesk-api/` a `rustdesk-api-web/` oddělují pracovní
-kopie, cache a hotové výsledky. `tools/` obsahuje již připravená společná SDK.
+Podadresáře `rustdesk/`, `rustdesk-server/`, `rustdesk-api/` a `rustdesk-api-web/`
+oddělují pracovní kopie a hotové výsledky. Klient a server sdílejí SDK a závislosti v `tools/rustdesk/PLATFORM/`.
+Projektové adresáře obsahují jen `build/` a `publish/`; dočasné soubory jsou
+v `tmp/PLATFORM/rustdesk/`. `tools/` obsahuje již připravená společná SDK.
 Relativní `artifacts` uvnitř izolovaných pracovních kopií se zachovávají podle
 požadavků Cargo, CMake a balicích nástrojů; fyzicky jsou uvnitř hlavního kořene.
 Přímé nižší build příkazy (`cargo`, `build.py`, upstream CI) si ponechávají své
@@ -43,10 +45,15 @@ upravenou sestavu (`1.5.1-a21`). Stejná přípona se používá v názvu EXE i 
 
 | Složka pod hlavním workspace `artifacts/` | Obsah |
 | --- | --- |
-| rustdesk/publish/windows-x64/ | rustdesk-VERSION-install.exe, hbbs.exe, hbbr.exe, rustdesk-utils.exe |
-| rustdesk/publish/linux-x64/ | rustdesk-VERSION.deb, hbbs, hbbr, rustdesk-utils, rustdesk-server-{hbbs,hbbr,utils}_VERSION_amd64.deb |
-| rustdesk/build/PLATFORM/ | pracovní kopie zdrojů, bin/obj, Flutter build a balicí mezisoubory |
-| rustdesk/cache/PLATFORM/ | izolované SDK, Rust toolchainy, Cargo/Pub/vcpkg a dočasné soubory |
+| rustdesk/publish/windows-x64/ | rustdesk-VERSION-install.exe |
+| rustdesk/publish/linux-x64/ | rustdesk-VERSION.deb |
+| rustdesk-server/publish/windows-x64/ | hbbs.exe, hbbr.exe, rustdesk-utils.exe |
+| rustdesk-server/publish/linux-x64/ | hbbs, hbbr, rustdesk-utils, rustdesk-server-{hbbs,hbbr,utils}_VERSION_amd64.deb |
+| rustdesk/build/PLATFORM/client/ | pracovní kopie klienta, Rust/Flutter build a balicí mezisoubory |
+| rustdesk-server/build/PLATFORM/server/ | pracovní kopie serveru a jeho artifacts/target/ |
+| rustdesk-server/build/linux-x64/server-debian/ | serverové balicí mezisoubory pro Debian |
+| tools/rustdesk/PLATFORM/ | SDK, Rust toolchainy a sdílené Cargo/Pub/vcpkg závislosti |
+| tmp/PLATFORM/rustdesk/ | dočasné soubory sestavení a instalace nástrojů |
 
 Windows klient je stejný typ samorozbalovacího instalačního EXE jako běžné
 stažení RustDesku; obsahuje instalaci služby. Vlastní build nemá podpis
@@ -56,12 +63,13 @@ Server běží přímo jako hbbs/hbbr nebo přes existující systemd jednotky.
 Serverové sestavení vytváří také samostatnou utilitu rustdesk-utils
 (rustdesk-utils.exe na Windows); vzniká i s volbou --only server.
 
-Pracovní kopie pod artifacts/rustdesk/build se při dalším sestavení vybrané komponenty
+Pracovní kopie pod artifacts/rustdesk/build a artifacts/rustdesk-server/build
+se při dalším sestavení vybrané komponenty
 obnovují včetně jejich Rust target adresáře; tato komponenta se překládá znovu.
 Ruční změny dělejte v původních zdrojích. Cache nástrojů, SDK a stažených
 závislostí se zachovávají.
 Pracovní kopie a výstupy společného buildu vznikají uvnitř hlavního artifacts.
-Windows npm používá standardní ignorovanou složku node_modules v API-web zdrojích. Publikované výstupy se nenahrávají ani neinstalují na
+Npm i ostatní generované soubory vznikají v izolovaných pracovních kopiích. Publikované výstupy se nenahrávají ani neinstalují na
 běžící RustDesk server.
 
 ## Windows x64
@@ -84,7 +92,7 @@ Systémové předpoklady pro klienta:
 
 Skript inicializuje vývojové prostředí Visual Studia sám. Globální SDK ani
 PATH neupravuje. Rust, Flutter, vcpkg, CMake a Python balíčky si při prvním
-sestavení stáhne do artifacts/rustdesk/cache/windows-x64. Samotný server nevyžaduje
+sestavení stáhne do artifacts/tools/rustdesk/windows-x64. Samotný server nevyžaduje
 Flutter, LLVM ani vcpkg; stále potřebuje C++ nástroje a Windows SDK.
 
 ### Přesný postup pro nový Windows počítač
@@ -169,7 +177,7 @@ bash build_linux.sh
 Předkontrola vypíše přesný apt-get příkaz pro chybějící systémové balíky.
 Úplný seznam je v scripts/build/debian-packages.txt. Skript sám nespouští
 sudo ani nemění systémové balíky. Rust/Flutter/CMake/vcpkg se připravují
-izolovaně pod artifacts/rustdesk/cache/linux-x64.
+izolovaně pod artifacts/tools/rustdesk/linux-x64.
 Balicí kroky používají fakeroot a normalizují POSIX oprávnění i na Windows
 NTFS disku ve WSL; změna mount nastavení není nutná. Serverové .deb mají
 závislosti na skutečně použitých systémových knihovnách.
@@ -258,7 +266,7 @@ Výsledky společných skriptů jsou pod hlavním workspace `artifacts/`:
 API balík už obsahuje právě sestavenou administraci v `resources/admin/`.
 Samostatné API/web sestavení nepotřebuje Rust, Flutter ani Visual Studio.
 Windows používá Node/npm z PATH, Go 1.23.10+ z PATH/GOROOT nebo z existující
-cache `artifacts/rustdesk-api/cache/go-toolchain/go/` a x64 MinGW kompilátor
+cache `artifacts/tools/rustdesk-api/go-toolchain/go/` a x64 MinGW kompilátor
 přes CC, PATH nebo připravený workspace llvm-mingw. Doporučený Node je 22 LTS.
 Na Linuxu se připnuté Node 22.17.0 a Go 1.23.10 podle potřeby stáhnou a ověří
 SHA-256 pouze do artifacts; systémové předpoklady zahrnují curl, tar a pro

@@ -2,8 +2,10 @@
 
 For local Windows/Debian builds, use the shared entrypoints described in
 [README.build.md](../README.build.md). They default to the workspace-level
-`../artifacts/`, with `rustdesk/{cache,build,publish}/`,
-`rustdesk-api/{cache,build,publish}/` and `rustdesk-api-web/{cache,build,publish}/`.
+`../artifacts/`, with `{rustdesk,rustdesk-server,rustdesk-api,rustdesk-api-web}/{build,publish}/`.
+SDKs and dependency caches are in `tools/`; the client and server share
+`tools/rustdesk/{windows-x64,linux-x64}/`. Temporary files are in
+`tmp/PLATFORM/COMPONENT/`.
 `--artifacts-root` or `RUSTDESK_ARTIFACTS_DIR` selects the shared root; on this
 machine use `C:/Git/RustDesk/artifacts` (`T:` is an alias). The client and server
 are built from disposable source copies under this root, so their internal
@@ -28,11 +30,11 @@ Each repository keeps Rust build products in its own `artifacts/target/`, config
 | Android/iOS symbol files from the build scripts | `artifacts/split-debug-info/` |
 | CI Windows release staging | `artifacts/staging/` |
 
-For example, run `cargo build --release` from this repository, then use `artifacts/target/release/rustdesk` (`.exe` on Windows). Run `python build.py --flutter` with the platform prerequisites installed to produce the normal platform build/package. CI cache, linking, signing and upload paths use the same Cargo directory.
+Source checkouts are inputs only. Run our build/test workflows from staged copies under artifacts; invoke low-level Cargo/Flutter/npm commands only inside those copies. Our helper scripts, harnesses, logs and reports belong under artifacts/AI, while SDKs and dependency caches belong under artifacts/tools and temporary files under artifacts/tmp/PLATFORM. CI cache, linking, signing and upload paths use the same Cargo directory.
 
 The `rustdesk-server` and `hbb_common` sibling repositories use their own `artifacts/target/` directories. Server UI assets are written to `rustdesk-server/artifacts/ui/dist/`; installer staging, signed binaries and Debian packaging use that repository's `artifacts/staging/`, `artifacts/publish/` and `artifacts/debian-build/`.
 
-The ignore rule `artifacts/` ignores directories with that name at every depth, including Flutter package staging. Synchronization tools should exclude directories named `artifacts` throughout the workspace as well; Git ignore rules do not configure external synchronization software. Shared portable SDKs and local test harnesses can live in the workspace-level `artifacts/tools/`.
+The ignore rule `artifacts/` ignores directories with that name at every depth, including Flutter package staging. Synchronization tools should exclude directories named `artifacts` throughout the workspace as well; Git ignore rules do not configure external synchronization software. Shared portable SDKs can live in workspace-level `artifacts/tools/`; our local harnesses belong under `artifacts/AI/`.
 
 ## Tool-managed paths
 

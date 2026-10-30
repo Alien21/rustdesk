@@ -5,6 +5,11 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
+
+# A directly invoked staging helper must also leave its source checkout untouched.
+sys.dont_write_bytecode = True
+from remove_tree import remove_tree
 
 
 def git(repo, *args):
@@ -60,33 +65,33 @@ def main():
     args = parser.parse_args()
     client = args.client_source.resolve()
     artifact_root = args.artifacts_root or Path(os.environ.get("RUSTDESK_ARTIFACTS_DIR", client.parent / "artifacts"))
-    for path in (artifact_root, args.destination):
-        absolute = Path(os.path.abspath(path))
-        for ancestor in (absolute, *absolute.parents):
-            if ancestor.exists() or ancestor.is_symlink():
-                if ancestor.is_symlink() or getattr(ancestor.lstat(), "st_file_attributes", 0) & 0x400:
-                    raise ValueError(f"Artifact path must not be redirected: {ancestor}")
-    artifact_root = artifact_root.resolve()
-    destination = args.destination.resolve()
-    # Only these two owned, generated locations may be replaced.
+    artifact_root = Path(os.path.abspath(artifact_root))
+    destination = Path(os.path.abspath(args.destination))
     allowed = {artifact_root / "rustdesk" / "build" / name for name in ("linux-x64", "windows-x64")}
     if destination not in allowed:
         raise ValueError("Destination must be rustdesk/build/linux-x64 or rustdesk/build/windows-x64 inside the shared artifacts root")
-    selected = (("client", client), ("server", args.server_source.resolve()))
-    for name, source in selected:
+    selected = (
+        ("client", client, destination / "client"),
+        ("server", args.server_source.resolve(), artifact_root / "rustdesk-server" / "build" / destination.name / "server"),
+    )
+    for name, source, target in selected:
         if args.only not in ("all", name):
             continue
+        for path in (artifact_root, target):
+            for ancestor in (path, *path.parents):
+                if ancestor.exists() or ancestor.is_symlink():
+                    if ancestor.is_symlink() or getattr(ancestor.lstat(), "st_file_attributes", 0) & 0x400:
+                        raise ValueError(f"Artifact path must not be redirected: {ancestor}")
         if not (source / "Cargo.toml").is_file():
             raise ValueError(f"Missing {name} source: {source}")
         # Validate before removing an older build copy.
         git(source, "rev-parse", "--show-toplevel")
-        target = destination / name
         if target == source or source in target.parents or target in source.parents:
             raise ValueError(f"Build directory overlaps the source checkout: {target}")
         if target.is_symlink() or (target.exists() and target.resolve() != target):
             raise ValueError(f"Build directory must not be a symlink: {target}")
         if target.exists():
-            shutil.rmtree(target)
+            remove_tree(target)
         print(f"Staging {name}: {source} -> {target}", flush=True)
         copy_repository(source, target)
 

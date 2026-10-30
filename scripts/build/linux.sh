@@ -26,7 +26,7 @@ Usage: linux.sh --client-source DIR --server-source DIR [--check] [--only all|cl
 Builds natively on Debian 13 amd64. Dependencies are checked before any files
 are written; missing packages are listed with an explicit apt-get command.
 Builds use isolated SDKs, caches and source copies below the shared artifacts root.
-Component namespaces are rustdesk, rustdesk-api and rustdesk-api-web; api includes APIweb.
+Component namespaces are rustdesk, rustdesk-server, rustdesk-api and rustdesk-api-web; api includes APIweb.
 --check only validates the host and sources; it performs no installs or downloads.
 HELP
 }
@@ -124,39 +124,49 @@ for source in "${SOURCES[@]}"; do
 done
 if ((CHECK)); then
     printf 'Debian 13 amd64 preflight passed (%s).\nClient Rust: %s; server Rust: %s; Flutter: %s; bridge: %s.\n' "$ONLY" "$CLIENT_RUST" "$SERVER_RUST" "$BUILD_FLUTTER" "$FRB_VERSION"
-    printf 'Publish directory: %s/rustdesk/publish/linux-x64\n' "$ARTIFACTS_ROOT"
+    [[ "$ONLY" == server ]] || printf 'Client publish directory: %s/rustdesk/publish/linux-x64\n' "$ARTIFACTS_ROOT"
+    [[ "$ONLY" == client ]] || printf 'Server publish directory: %s/rustdesk-server/publish/linux-x64\n' "$ARTIFACTS_ROOT"
     exit 0
 fi
 
 if [[ "$ONLY" == all ]]; then rd_api_build; fi
 
 ARTIFACTS="$ARTIFACTS_ROOT/rustdesk"
-CACHE="$ARTIFACTS/cache/linux-x64"
+CACHE="$ARTIFACTS_ROOT/tools/rustdesk/linux-x64"
 STAGE="$ARTIFACTS/build/linux-x64"
 PUBLISH="$ARTIFACTS/publish/linux-x64"
+SERVER_ARTIFACTS="$ARTIFACTS_ROOT/rustdesk-server"
+SERVER_STAGE="$SERVER_ARTIFACTS/build/linux-x64"
+SERVER_PUBLISH="$SERVER_ARTIFACTS/publish/linux-x64"
 export CARGO_HOME="$CACHE/cargo"
 export RUSTUP_HOME="$CACHE/rustup"
 export PUB_CACHE="$CACHE/pub"
 export XDG_CACHE_HOME="$CACHE/xdg-cache"
 export XDG_CONFIG_HOME="$CACHE/xdg-config"
-export TMPDIR="$CACHE/tmp"
-export CARGO_TARGET_DIR="$CACHE/tool-build"
+export TMPDIR="$ARTIFACTS_ROOT/tmp/linux-x64/rustdesk"
+export PYTHONPYCACHEPREFIX="$TMPDIR/python-pycache"
+export CARGO_TARGET_DIR="$TMPDIR/tool-build"
 export CARGO_INCREMENTAL=0
 export FLUTTER_SUPPRESS_ANALYTICS=true
 export DART_SUPPRESS_ANALYTICS=true
 export CI=true
-for owned_path in "$ARTIFACTS" "$CACHE" "$STAGE" "$PUBLISH" "$TMPDIR"; do
+owned_paths=("$ARTIFACTS" "$CACHE" "$TMPDIR")
+[[ "$ONLY" == server ]] || owned_paths+=("$STAGE" "$PUBLISH")
+[[ "$ONLY" == client ]] || owned_paths+=("$SERVER_ARTIFACTS" "$SERVER_STAGE" "$SERVER_PUBLISH")
+for owned_path in "${owned_paths[@]}"; do
     [[ "$(realpath -m -- "$owned_path")" == "$owned_path" ]] || fail "Refusing redirected artifact path: $owned_path"
 done
-mkdir -p "$CACHE/downloads" "$CARGO_HOME" "$RUSTUP_HOME" "$PUB_CACHE" "$XDG_CACHE_HOME" "$XDG_CONFIG_HOME" "$TMPDIR" "$PUBLISH"
+mkdir -p "$CACHE/downloads" "$CARGO_HOME" "$RUSTUP_HOME" "$PUB_CACHE" "$XDG_CACHE_HOME" "$XDG_CONFIG_HOME" "$TMPDIR"
 RUN_TMP=$(mktemp -d "$TMPDIR/build.XXXXXXXX")
 trap 'status=$?; rm -rf -- "$RUN_TMP"; exit "$status"' EXIT
-trap 'printf "Build failed at line %s. No older selected output is retained in %s.\n" "$LINENO" "$PUBLISH" >&2' ERR
+trap 'printf "Build failed at line %s. No older selected output is retained under %s.\n" "$LINENO" "$ARTIFACTS_ROOT" >&2' ERR
 if [[ "$ONLY" != server ]]; then
+    mkdir -p "$PUBLISH"
     find "$PUBLISH" -maxdepth 1 \( -type f -o -type l \) -name 'rustdesk-[0-9]*.deb' -delete
 fi
 if [[ "$ONLY" != client ]]; then
-    find "$PUBLISH" -maxdepth 1 \( -type f -o -type l \) \( -name 'rustdesk-server-*.deb' -o -name hbbs -o -name hbbr -o -name rustdesk-utils \) -delete
+    mkdir -p "$SERVER_PUBLISH"
+    find "$SERVER_PUBLISH" -maxdepth 1 \( -type f -o -type l \) \( -name 'rustdesk-server-*.deb' -o -name hbbs -o -name hbbr -o -name rustdesk-utils \) -delete
 fi
 
 fetch() { curl --fail --location --retry 3 --output "$2" "$1"; }
@@ -212,7 +222,9 @@ build_client() {
     [[ -f "$client/build.py" ]] || fail "stage.py did not create $client"
     if [[ ! -x "$cmake_env/bin/python" ]]; then python3 -m venv "$cmake_env"; fi
     "$cmake_env/bin/python" -m pip install --disable-pip-version-check "cmake==$CMAKE_VERSION"
-    export PATH="$cmake_env/bin:$tools/bin:$PATH"
+    local cmake_bin
+    cmake_bin=$("$cmake_env/bin/python" -c 'import cmake; print(cmake.CMAKE_BIN_DIR)')
+    export PATH="$cmake_bin:$tools/bin:$PATH"
     export RUSTUP_TOOLCHAIN="$CLIENT_RUST"
     export LIBCLANG_PATH
     LIBCLANG_PATH=$(llvm-config --libdir)
@@ -289,11 +301,11 @@ PY
 }
 
 build_server() {
-    local server="$STAGE/server" package_dir="$STAGE/server-debian"
+    local server="$SERVER_STAGE/server" package_dir="$SERVER_STAGE/server-debian"
     [[ -f "$server/Cargo.toml" ]] || fail "stage.py did not create $server"
-    [[ "$(realpath -m -- "$package_dir")" == "$STAGE/server-debian" ]] || fail 'Refusing to clean a redirected server package directory'
+    [[ "$(realpath -m -- "$package_dir")" == "$SERVER_STAGE/server-debian" ]] || fail 'Refusing to clean a redirected server package directory'
     rm -rf -- "$package_dir"
-    find "$STAGE" -maxdepth 1 \( -type f -o -type l \) -name 'rustdesk-server-*.deb' -delete
+    find "$SERVER_STAGE" -maxdepth 1 \( -type f -o -type l \) -name 'rustdesk-server-*.deb' -delete
     export RUSTUP_TOOLCHAIN="$SERVER_RUST"
     export CARGO_TARGET_DIR="$server/artifacts/target"
     (cd "$server" && cargo build --locked --release --bin hbbs --bin hbbr --bin rustdesk-utils)
@@ -333,15 +345,16 @@ PY
         done
         debian/rules binary
     ')
-    local packages=("$STAGE"/rustdesk-server-*_amd64.deb)
+    local packages=("$SERVER_STAGE"/rustdesk-server-*_amd64.deb)
     [[ -f "${packages[0]}" ]] || fail 'Server packaging did not produce Debian packages'
     for package in "${packages[@]}"; do
         dpkg-deb --info "$package" >/dev/null
-        install -m 0644 -- "$package" "$PUBLISH/"
+        install -m 0644 -- "$package" "$SERVER_PUBLISH/"
     done
-    for binary in hbbs hbbr rustdesk-utils; do install -m 0755 -- "$package_dir/bin/$binary" "$PUBLISH/$binary"; done
+    for binary in hbbs hbbr rustdesk-utils; do install -m 0755 -- "$package_dir/bin/$binary" "$SERVER_PUBLISH/$binary"; done
 }
 
 if [[ "$ONLY" != server ]]; then build_client; fi
 if [[ "$ONLY" != client ]]; then build_server; fi
-printf 'Build completed: %s\n' "$PUBLISH"
+[[ "$ONLY" == server ]] || printf 'Client build completed: %s\n' "$PUBLISH"
+[[ "$ONLY" == client ]] || printf 'Server build completed: %s\n' "$SERVER_PUBLISH"

@@ -12,7 +12,7 @@ rd_api_find_node() {
     local candidate version
     RD_API_NODE=
     RD_API_NPM=
-    for candidate in "$RD_API_WEB_ARTIFACTS/cache/linux-tools/node-v22.17.0-linux-x64/bin/node" "$(command -v node || true)"; do
+    for candidate in "$RD_API_WEB_TOOLS/linux-tools/node-v22.17.0-linux-x64/bin/node" "$(command -v node || true)"; do
         [[ -x "$candidate" && -x "${candidate%/*}/npm" ]] || continue
         version=$("$candidate" -p 'process.platform + "/" + process.arch + "/" + process.versions.node' 2>/dev/null) || continue
         if [[ "$version" =~ ^linux/x64/([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] &&
@@ -23,12 +23,12 @@ rd_api_find_node() {
             return
         fi
     done
-    printf 'APIweb Node/npm: build will prepare verified portable Node 22.17.0 in %s/cache/linux-tools.\n' "$RD_API_WEB_ARTIFACTS"
+    printf 'APIweb Node/npm: build will prepare verified portable Node 22.17.0 in %s/linux-tools.\n' "$RD_API_WEB_TOOLS"
 }
 rd_api_find_go() {
     local candidate version
     RD_API_GO=
-    for candidate in "$RD_API_ARTIFACTS/cache/linux-tools/go-1.23.10/bin/go" "$(command -v go || true)"; do
+    for candidate in "$RD_API_TOOLS/linux-tools/go-1.23.10/bin/go" "$(command -v go || true)"; do
         [[ -x "$candidate" ]] || continue
         version=$(env -u GOROOT GOENV=off GOTOOLCHAIN=local "$candidate" version 2>/dev/null) || continue
         if [[ "$version" == 'go version go1.23.10 linux/amd64' ]]; then
@@ -37,10 +37,10 @@ rd_api_find_go() {
             return
         fi
     done
-    printf 'API Go: build will prepare verified portable Go 1.23.10 in %s/cache/linux-tools.\n' "$RD_API_ARTIFACTS"
+    printf 'API Go: build will prepare verified portable Go 1.23.10 in %s/linux-tools.\n' "$RD_API_TOOLS"
 }
 rd_api_preflight() {
-    local anchor command compiler source
+    local anchor command compiler source directory namespace
     RD_API_COMPONENT=$1
     RD_API_GO=
     anchor=$(cd -- "$4" && pwd -P)
@@ -51,6 +51,10 @@ rd_api_preflight() {
     RD_API_BASE=$(realpath -ms -- "$RD_API_BASE")
     RD_API_ARTIFACTS="$RD_API_BASE/rustdesk-api"
     RD_API_WEB_ARTIFACTS="$RD_API_BASE/rustdesk-api-web"
+    RD_API_TOOLS="$RD_API_BASE/tools/rustdesk-api"
+    RD_API_WEB_TOOLS="$RD_API_BASE/tools/rustdesk-api-web"
+    RD_API_TEMP="$RD_API_BASE/tmp/linux-x64/rustdesk-api"
+    RD_API_WEB_TEMP="$RD_API_BASE/tmp/linux-x64/rustdesk-api-web"
     [[ "$(uname -s)" == Linux && -r /etc/os-release ]] || fail 'API builds require Debian 13 amd64 (native or WSL)'
     local ID VERSION_ID
     . /etc/os-release
@@ -61,22 +65,33 @@ rd_api_preflight() {
     [[ "$RD_API_WEB" == /* && -d "$RD_API_WEB" ]] || fail '--apiweb-source must name an absolute APIweb checkout directory'
     RD_API_WEB=$(cd -- "$RD_API_WEB" && pwd -P)
     rd_api_separate "$RD_API_WEB" "$RD_API_WEB_ARTIFACTS"
+    rd_api_separate "$RD_API_WEB" "$RD_API_WEB_TOOLS"
+    rd_api_separate "$RD_API_WEB" "$RD_API_WEB_TEMP"
     [[ -f "$RD_API_WEB/package.json" && -f "$RD_API_WEB/package-lock.json" ]] || fail 'APIweb requires package.json and package-lock.json for npm ci'
-    for directory in cache/linux-tools/node-v22.17.0-linux-x64 cache/npm-linux tmp build/linux-amd64/source publish/web; do
+    for directory in build/linux-amd64/source publish/web; do
         rd_api_owned "$RD_API_WEB_ARTIFACTS" "$RD_API_WEB_ARTIFACTS/$directory"
     done
+    for directory in linux-tools/node-v22.17.0-linux-x64 npm-linux vite; do
+        rd_api_owned "$RD_API_WEB_TOOLS" "$RD_API_WEB_TOOLS/$directory"
+    done
+    rd_api_owned "$RD_API_BASE/tmp/linux-x64" "$RD_API_WEB_TEMP"
     rd_api_find_node
     if [[ "$RD_API_COMPONENT" != apiweb ]]; then
         [[ "$RD_API_SOURCE" == /* && -d "$RD_API_SOURCE" ]] || fail '--api-source must name an absolute API checkout directory'
         RD_API_SOURCE=$(cd -- "$RD_API_SOURCE" && pwd -P)
         for source in "$RD_API_SOURCE" "$RD_API_WEB"; do
-            rd_api_separate "$source" "$RD_API_ARTIFACTS"
-            rd_api_separate "$source" "$RD_API_WEB_ARTIFACTS"
+            for namespace in "$RD_API_ARTIFACTS" "$RD_API_WEB_ARTIFACTS" "$RD_API_TOOLS" "$RD_API_WEB_TOOLS" "$RD_API_TEMP" "$RD_API_WEB_TEMP"; do
+                rd_api_separate "$source" "$namespace"
+            done
         done
         [[ -f "$RD_API_SOURCE/go.mod" && -f "$RD_API_SOURCE/build.sh" && -f "$RD_API_SOURCE/scripts/build/main.go" ]] || fail 'API source requires go.mod and its isolated build helper'
-        for directory in cache/linux-tools/go-1.23.10 cache/go-build cache/go-mod tmp build/linux-amd64 publish/linux-amd64; do
+        for directory in build/linux-amd64 publish/linux-amd64; do
             rd_api_owned "$RD_API_ARTIFACTS" "$RD_API_ARTIFACTS/$directory"
         done
+        for directory in linux-tools/go-1.23.10 go-build go-mod gopath; do
+            rd_api_owned "$RD_API_TOOLS" "$RD_API_TOOLS/$directory"
+        done
+        rd_api_owned "$RD_API_BASE/tmp/linux-x64" "$RD_API_TEMP"
         command -v gcc >/dev/null 2>&1 || fail 'API CGO build requires native Linux gcc'
         compiler=$(gcc -dumpmachine)
         [[ "$compiler" == x86_64*-linux* ]] || fail "API CGO build requires Linux amd64 gcc, found: $compiler"
@@ -93,14 +108,15 @@ rd_api_preflight() {
 }
 rd_api_sdk() (
     set -Eeuo pipefail
-    local owner=$1 name=$2 url=$3 expected=$4 member=$5 destination=$6
-    local cache="$owner/cache/linux-tools" temporary download
+    local owner=$1 name=$2 url=$3 expected=$4 member=$5 destination=$6 temporary_root=$7
+    local cache="$owner/linux-tools" temporary download
     rd_api_owned "$owner" "$cache"
     rd_api_owned "$owner" "$cache/downloads"
-    rd_api_owned "$owner" "$cache/tmp"
     rd_api_owned "$owner" "$destination"
-    mkdir -p "$cache/downloads" "$cache/tmp"
-    temporary=$(mktemp -d "$cache/tmp/sdk.XXXXXXXX")
+    rd_api_owned "$RD_API_BASE/tmp/linux-x64" "$temporary_root"
+    mkdir -p "$cache/downloads" "$temporary_root"
+    export TMPDIR="$temporary_root" TMP="$temporary_root" TEMP="$temporary_root"
+    temporary=$(mktemp -d "$temporary_root/sdk.XXXXXXXX")
     trap 'rm -rf -- "$temporary"' EXIT
     download="$cache/downloads/$name"
     rd_api_owned "$owner" "$download"
@@ -120,26 +136,26 @@ rd_api_build() (
     local stage="$RD_API_WEB_ARTIFACTS/build/linux-amd64/source"
     local publish="$RD_API_WEB_ARTIFACTS/publish/web"
     if [[ -z "$RD_API_NODE" ]]; then
-        rd_api_sdk "$RD_API_WEB_ARTIFACTS" node-v22.17.0-linux-x64.tar.gz \
+        rd_api_sdk "$RD_API_WEB_TOOLS" node-v22.17.0-linux-x64.tar.gz \
             https://nodejs.org/dist/v22.17.0/node-v22.17.0-linux-x64.tar.gz \
             0fa01328a0f3d10800623f7107fbcd654a60ec178fab1ef5b9779e94e0419e1a \
-            node-v22.17.0-linux-x64 "$RD_API_WEB_ARTIFACTS/cache/linux-tools/node-v22.17.0-linux-x64"
+            node-v22.17.0-linux-x64 "$RD_API_WEB_TOOLS/linux-tools/node-v22.17.0-linux-x64" "$RD_API_WEB_TEMP"
         rd_api_find_node
         [[ -n "$RD_API_NODE" ]] || fail 'Portable Linux Node/npm did not start'
     fi
     if [[ "$RD_API_COMPONENT" != apiweb && -z "$RD_API_GO" ]]; then
-        rd_api_sdk "$RD_API_ARTIFACTS" go1.23.10.linux-amd64.tar.gz \
+        rd_api_sdk "$RD_API_TOOLS" go1.23.10.linux-amd64.tar.gz \
             https://go.dev/dl/go1.23.10.linux-amd64.tar.gz \
             535f9f81802499f2a7dbfa70abb8fda3793725fcc29460f719815f6e10b5fd60 \
-            go "$RD_API_ARTIFACTS/cache/linux-tools/go-1.23.10"
+            go "$RD_API_TOOLS/linux-tools/go-1.23.10" "$RD_API_TEMP"
         rd_api_find_go
         [[ -n "$RD_API_GO" ]] || fail 'Portable Linux Go 1.23.10 did not start'
     fi
     export RUSTDESK_ARTIFACTS_DIR="$RD_API_BASE"
     export PATH="${RD_API_NODE%/*}:$PATH"
-    export npm_config_cache="$RD_API_WEB_ARTIFACTS/cache/npm-linux"
+    export npm_config_cache="$RD_API_WEB_TOOLS/npm-linux"
     export npm_config_update_notifier=false
-    export TMPDIR="$RD_API_WEB_ARTIFACTS/tmp"
+    export TMPDIR="$RD_API_WEB_TEMP"
     export TMP="$TMPDIR" TEMP="$TMPDIR"
     unset NODE_PATH
     rd_api_owned "$RD_API_WEB_ARTIFACTS" "$stage"

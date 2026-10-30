@@ -40,7 +40,7 @@ function Find-Python {
     throw 'Native Windows Python 3.9 or newer is required. Install Python or set PYTHON to its python.exe.'
 }
 function Assert-SymlinkSupport {
-    $probeDirectory = Assert-ArtifactPath (Join-Path $Artifacts 'cache\windows-x64\preflight')
+    $probeDirectory = Assert-ArtifactPath (Join-Path $Temporary 'preflight')
     New-Item -ItemType Directory -Path $probeDirectory -Force | Out-Null
     $probe = @'
 import os, sys, tempfile
@@ -61,8 +61,13 @@ function Assert-ArtifactPath {
     param([string]$Path)
     $absolute = [IO.Path]::GetFullPath($Path)
     $artifactRoot = [IO.Path]::GetFullPath($ArtifactsRoot).TrimEnd('\')
-    $prefix = [IO.Path]::GetFullPath($Artifacts).TrimEnd('\') + '\'
-    if (-not $absolute.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) { throw "Build path is outside artifacts: $absolute" }
+    $allowedRoots = @((Join-Path $Artifacts 'build'), (Join-Path $Artifacts 'publish'), (Join-Path $ServerArtifacts 'build'), (Join-Path $ServerArtifacts 'publish'), (Join-Path $ArtifactsRoot 'tools\rustdesk'), (Join-Path $ArtifactsRoot 'tmp\windows-x64'))
+    $allowed = $false
+    foreach ($root in $allowedRoots) {
+        $prefix = [IO.Path]::GetFullPath($root).TrimEnd('\') + '\'
+        if ($absolute.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) { $allowed = $true; break }
+    }
+    if (-not $allowed) { throw "Build path is outside artifacts: $absolute" }
     # A redirected parent could otherwise move a lexically safe deletion outside artifacts.
     $ancestor = $absolute
     while ($ancestor.Length -ge $artifactRoot.Length) {
@@ -80,7 +85,7 @@ function Remove-ArtifactDirectory {
     $absolute = Assert-ArtifactPath $Path
     if (Test-Path -LiteralPath $absolute) {
         if ((Get-Item -LiteralPath $absolute -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "Refusing redirected build directory: $absolute" }
-        Remove-Item -LiteralPath $absolute -Recurse -Force
+        Invoke-Checked $Python @((Join-Path $ClientSource 'scripts\build\remove_tree.py'), '--root', $ArtifactsRoot, $absolute)
     }
 }
 function Import-VisualStudio {
@@ -128,7 +133,7 @@ function Get-Download {
     param([string]$Uri, [string]$Name)
     $path = Join-Path $Downloads $Name
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
-        $partial = "$path.part"
+        $partial = Join-Path $Temporary ($Name + '.part')
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
         Write-Host "Downloading $Name"
         Invoke-WebRequest -UseBasicParsing -Uri $Uri -OutFile $partial
@@ -193,7 +198,7 @@ function Initialize-ClientTools {
     $pythonEnvironment = Join-Path $Cache 'python'
     $venvPython = Join-Path $pythonEnvironment 'Scripts\python.exe'
     if (-not (Test-Path -LiteralPath $venvPython -PathType Leaf)) { Invoke-Checked $Python @('-m', 'venv', $pythonEnvironment) }
-    $shimDirectory = Join-Path $Cache 'command-shims'
+    $shimDirectory = Join-Path $Temporary 'command-shims'
     New-Item -ItemType Directory -Path $shimDirectory -Force | Out-Null
     # build.py invokes these conventional command names through cmd.exe.
     $pythonShim = '@echo off' + [Environment]::NewLine + '"' + $venvPython + '" %*' + [Environment]::NewLine
@@ -205,7 +210,7 @@ function Initialize-ClientTools {
     Invoke-Checked $venvPython @('-m', 'pip', 'install', '--disable-pip-version-check', '-r', (Join-Path $StagedClient 'libs\portable\requirements.txt'))
     $codegenDirectory = Join-Path $Cache 'codegen-1.80.1-expand-1.0.95'
     $env:RUSTUP_TOOLCHAIN = "$ClientRust-x86_64-pc-windows-msvc"
-    $env:CARGO_TARGET_DIR = Join-Path $Cache 'codegen-target'
+    $env:CARGO_TARGET_DIR = Join-Path $Temporary 'codegen-target'
     if (-not (Test-Path -LiteralPath (Join-Path $codegenDirectory 'bin\cargo-expand.exe') -PathType Leaf)) {
         Invoke-Checked $Rustup @('run', $env:RUSTUP_TOOLCHAIN, 'cargo', 'install', 'cargo-expand', '--version', '1.0.95', '--locked', '--root', $codegenDirectory)
     }
@@ -238,8 +243,8 @@ function Build-Client {
     if (Test-Path -LiteralPath $lockfile) { $originalLock = [IO.File]::ReadAllBytes($lockfile) }
     Push-Location $StagedClient
     try {
-        $temporary = [IO.File]::ReadAllText($pubspec) -replace 'extended_text:\s*14\.0\.0', 'extended_text: 13.0.0'
-        [IO.File]::WriteAllText($pubspec, $temporary, (New-Object Text.UTF8Encoding($false)))
+        $temporaryPubspec = [IO.File]::ReadAllText($pubspec) -replace 'extended_text:\s*14\.0\.0', 'extended_text: 13.0.0'
+        [IO.File]::WriteAllText($pubspec, $temporaryPubspec, (New-Object Text.UTF8Encoding($false)))
         Push-Location (Join-Path $StagedClient 'flutter')
         try { Invoke-Checked $Tools.CodegenFlutter @('pub', 'get') } finally { Pop-Location }
         # Written for the explicit build pipeline; agents must not execute codegen during editing.
@@ -264,7 +269,7 @@ function Build-Client {
     if (-not (Test-Path -LiteralPath $engineMarker)) {
         # This moving engine URL matches upstream CI; its downloaded digest is recorded locally.
         $engineZip = Get-Download 'https://github.com/rustdesk/engine/releases/download/main/windows-x64-release.zip' 'windows-x64-release.zip'
-        $engineExtract = Join-Path $Cache 'windows-engine'
+        $engineExtract = Join-Path $Temporary 'windows-engine'
         Remove-ArtifactDirectory $engineExtract
         Expand-Archive -LiteralPath $engineZip -DestinationPath $engineExtract -Force
         $engineSource = $engineExtract
@@ -323,13 +328,20 @@ try {
         Invoke-ApiWindows -ApiSource $ApiSource -ApiWebSource $ApiWebSource -ArtifactsRoot $ArtifactsRoot -Check
     }
     $Artifacts = Join-Path $ArtifactsRoot 'rustdesk'
-    $Cache = Join-Path $Artifacts 'cache\windows-x64'
+    $Cache = Join-Path $ArtifactsRoot 'tools\rustdesk\windows-x64'
+    $Temporary = Join-Path $ArtifactsRoot 'tmp\windows-x64\rustdesk'
     $Downloads = Join-Path $Cache 'downloads'
     $Stage = Join-Path $Artifacts 'build\windows-x64'
     $Publish = Join-Path $Artifacts 'publish\windows-x64'
+    $ServerArtifacts = Join-Path $ArtifactsRoot 'rustdesk-server'
+    $ServerStage = Join-Path $ServerArtifacts 'build\windows-x64'
+    $ServerPublish = Join-Path $ServerArtifacts 'publish\windows-x64'
     $StagedClient = Join-Path $Stage 'client'
-    $StagedServer = Join-Path $Stage 'server'
-    foreach ($artifactPath in @($Cache, $Downloads, $Stage, $Publish)) { Assert-ArtifactPath $artifactPath | Out-Null }
+    $StagedServer = Join-Path $ServerStage 'server'
+    $artifactPaths = @($Cache, $Downloads, $Temporary)
+    if ($NeedsClient) { $artifactPaths += @($Stage, $Publish) }
+    if ($NeedsServer) { $artifactPaths += @($ServerStage, $ServerPublish) }
+    foreach ($artifactPath in $artifactPaths) { Assert-ArtifactPath $artifactPath | Out-Null }
     $Python = Find-Python
     $nativeGit = Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::ProgramFiles)) 'Git\cmd\git.exe'
     if (Test-Path -LiteralPath $nativeGit -PathType Leaf) { $Git = $nativeGit }
@@ -353,19 +365,19 @@ try {
     Write-Host "Python: $Python"
     Write-Host "Git: $Git"
     Write-Host "Selected components: $Only"
-    Write-Host "Build: $Stage"
-    Write-Host "Publish: $Publish"
+    if ($NeedsClient) { Write-Host "Client build: $Stage"; Write-Host "Client publish: $Publish" }
+    if ($NeedsServer) { Write-Host "Server build: $ServerStage"; Write-Host "Server publish: $ServerPublish" }
     if ($Check) {
         Write-Host "Prerequisites passed. Rust/Flutter/vcpkg/CMake/Python packages will be prepared only inside $Cache during a build."
         exit 0
     }
     New-Item -ItemType Directory -Path $Cache, $Downloads -Force | Out-Null
-    $env:TEMP = Join-Path $Cache 'tmp'
+    $env:TEMP = $Temporary
     $env:TMP = $env:TEMP
     $env:CARGO_HOME = Join-Path $Cache 'cargo'
     $env:RUSTUP_HOME = Join-Path $Cache 'rustup'
     $env:PUB_CACHE = Join-Path $Cache 'pub'
-    $env:PYTHONPYCACHEPREFIX = Join-Path $Cache 'python-pycache'
+    $env:PYTHONPYCACHEPREFIX = Join-Path $Temporary 'python-pycache'
     $env:CI = 'true'
     $env:FLUTTER_SUPPRESS_ANALYTICS = 'true'
     $env:DART_SUPPRESS_ANALYTICS = 'true'
@@ -382,21 +394,26 @@ try {
     if ($NeedsClient) {
         $env:LIBCLANG_PATH = $Libclang
         $tools = Initialize-ClientTools
-        $outputs += Build-Client $tools
+        $outputs += @{ Publish = $Publish; Client = $true; Files = @(Build-Client $tools) }
     }
-    if ($NeedsServer) { $outputs += Build-Server }
+    if ($NeedsServer) { $outputs += @{ Publish = $ServerPublish; Client = $false; Files = @(Build-Server) } }
     if ($NeedsApiWeb) { Invoke-ApiWindows -ApiSource $ApiSource -ApiWebSource $ApiWebSource -ArtifactsRoot $ArtifactsRoot }
     # Publish only after every selected component has completed successfully.
-    $pending = Assert-ArtifactPath (Join-Path $Artifacts ('publish\.windows-x64-' + [Guid]::NewGuid().ToString('N')))
-    New-Item -ItemType Directory -Path $pending -Force | Out-Null
-    foreach ($output in $outputs) { Copy-Item -LiteralPath $output -Destination $pending }
-    if ($Only -eq 'all') { Remove-ArtifactDirectory $Publish }
-    Assert-ArtifactPath $Publish | Out-Null
-    New-Item -ItemType Directory -Path $Publish -Force | Out-Null
-    if ($NeedsClient) { Get-ChildItem -LiteralPath $Publish -Filter 'rustdesk-*-install.exe' -File | Remove-Item -Force }
-    foreach ($output in $outputs) { Move-Item -LiteralPath (Join-Path $pending (Split-Path $output -Leaf)) -Destination $Publish -Force }
-    Remove-ArtifactDirectory $pending
-    Write-Host "Build completed: $Publish"
+    foreach ($component in $outputs) {
+        $component.Pending = Assert-ArtifactPath (Join-Path $Temporary ('publish-' + [Guid]::NewGuid().ToString('N')))
+        New-Item -ItemType Directory -Path $component.Pending -Force | Out-Null
+        foreach ($output in $component.Files) { Copy-Item -LiteralPath $output -Destination $component.Pending }
+    }
+    foreach ($component in $outputs) {
+        $directory = $component.Publish
+        if ($Only -eq 'all') { Remove-ArtifactDirectory $directory }
+        Assert-ArtifactPath $directory | Out-Null
+        New-Item -ItemType Directory -Path $directory -Force | Out-Null
+        if ($component.Client) { Get-ChildItem -LiteralPath $directory -Filter 'rustdesk-*-install.exe' -File | Remove-Item -Force }
+        foreach ($output in $component.Files) { Move-Item -LiteralPath (Join-Path $component.Pending (Split-Path $output -Leaf)) -Destination $directory -Force }
+        Remove-ArtifactDirectory $component.Pending
+        Write-Host "Build completed: $directory"
+    }
 } catch {
     Write-Error $_
     exit 1

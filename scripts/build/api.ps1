@@ -38,9 +38,40 @@ function Assert-ApiSeparatePaths {
         throw "API source and artifact namespace must be separate: $Source / $Artifacts"
     }
 }
+function Copy-ApiWebSource {
+    param([string]$Source, [string]$Destination, [switch]$Nested)
+    foreach ($item in Get-ChildItem -LiteralPath $Source -Force) {
+        if (-not $Nested -and $item.Name -in @('.git', 'artifacts', 'node_modules', 'dist')) { continue }
+        if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "Refusing redirected APIweb source: $($item.FullName)" }
+        $target = Join-Path $Destination $item.Name
+        if ($item.PSIsContainer) {
+            New-Item -ItemType Directory -Path $target -Force | Out-Null
+            Copy-ApiWebSource -Source $item.FullName -Destination $target -Nested
+        } else {
+            Copy-Item -LiteralPath $item.FullName -Destination $target -Force
+        }
+    }
+}
+function Remove-ApiGeneratedTree {
+    param([string]$Path)
+    $entry = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+    if ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+        if ($entry.PSIsContainer) { [IO.Directory]::Delete($Path, $false) }
+        else { [IO.File]::Delete($Path) }
+        return
+    }
+    if ($entry.PSIsContainer) {
+        foreach ($child in Get-ChildItem -LiteralPath $Path -Force) {
+            Remove-ApiGeneratedTree -Path $child.FullName
+        }
+    }
+    $entry.Attributes = $entry.Attributes -band (-bnot [IO.FileAttributes]::ReadOnly)
+    if ($entry.PSIsContainer) { [IO.Directory]::Delete($Path, $false) }
+    else { [IO.File]::Delete($Path) }
+}
 function Find-ApiGo {
     param([string]$Artifacts)
-    $candidates = @((Join-Path $Artifacts 'cache\go-toolchain\go\bin\go.exe'))
+    $candidates = @((Join-Path $Artifacts 'go-toolchain\go\bin\go.exe'))
     if ($env:GOROOT) { $candidates += (Join-Path $env:GOROOT 'bin\go.exe') }
     $command = Get-Command go.exe -CommandType Application -ErrorAction SilentlyContinue
     if ($command) { $candidates += $command.Source }
@@ -51,7 +82,7 @@ function Find-ApiGo {
             return $candidate
         }
     }
-    throw 'The API requires native Windows x64 Go 1.23.10 or newer. Put its go.exe on PATH, set GOROOT, or extract portable Go into artifacts/rustdesk-api/cache/go-toolchain/go.'
+    throw 'The API requires native Windows x64 Go 1.23.10 or newer. Put its go.exe on PATH, set GOROOT, or extract portable Go into artifacts/tools/rustdesk-api/go-toolchain/go.'
 }
 function Find-ApiCompiler {
     param([string]$ArtifactsRoot)
@@ -80,12 +111,13 @@ function Invoke-ApiWindows {
     $ArtifactsRoot = [IO.Path]::GetFullPath($ArtifactsRoot)
     $apiArtifacts = Join-Path $ArtifactsRoot 'rustdesk-api'
     $webArtifacts = Join-Path $ArtifactsRoot 'rustdesk-api-web'
-    Assert-ApiSeparatePaths $ApiWebSource $webArtifacts
-    if (-not $WebOnly) {
-        foreach ($source in @($ApiSource, $ApiWebSource)) {
-            foreach ($namespace in @($apiArtifacts, $webArtifacts)) {
-                Assert-ApiSeparatePaths $source $namespace
-            }
+    $apiTools = Join-Path $ArtifactsRoot 'tools\rustdesk-api'
+    $webTools = Join-Path $ArtifactsRoot 'tools\rustdesk-api-web'
+    $apiTemp = Join-Path $ArtifactsRoot 'tmp\windows-x64\rustdesk-api'
+    $webTemp = Join-Path $ArtifactsRoot 'tmp\windows-x64\rustdesk-api-web'
+    foreach ($source in @($ApiSource, $ApiWebSource)) {
+        foreach ($namespace in @($apiArtifacts, $webArtifacts, $apiTools, $webTools, $apiTemp, $webTemp)) {
+            Assert-ApiSeparatePaths $source $namespace
         }
     }
     Assert-ApiFile (Join-Path $ApiWebSource 'package.json')
@@ -94,17 +126,24 @@ function Invoke-ApiWindows {
         Assert-ApiFile (Join-Path $ApiSource 'build.bat')
         Assert-ApiFile (Join-Path $ApiSource 'go.mod')
     }
-    Assert-ApiGeneratedPath $ApiWebSource 'node_modules' | Out-Null
-    foreach ($relative in @('cache\npm', 'cache\vite', 'tmp', 'publish\web')) {
+    foreach ($relative in @('build\windows-amd64\source', 'publish\web')) {
         Assert-ApiGeneratedPath $webArtifacts $relative | Out-Null
     }
+    foreach ($relative in @('npm', 'vite')) {
+        Assert-ApiGeneratedPath $webTools $relative | Out-Null
+    }
+    Assert-ApiGeneratedPath $ArtifactsRoot 'tmp\windows-x64\rustdesk-api-web' | Out-Null
     if (-not $WebOnly) {
-        foreach ($relative in @('cache\go-build', 'cache\go-mod', 'tmp', 'build\windows-amd64', 'publish\windows-amd64')) {
+        foreach ($relative in @('build\windows-amd64', 'publish\windows-amd64')) {
             Assert-ApiGeneratedPath $apiArtifacts $relative | Out-Null
         }
+        foreach ($relative in @('go-build', 'go-mod', 'gopath', 'go-toolchain\go')) {
+            Assert-ApiGeneratedPath $apiTools $relative | Out-Null
+        }
+        Assert-ApiGeneratedPath $ArtifactsRoot 'tmp\windows-x64\rustdesk-api' | Out-Null
     }
     $saved = @{}
-    foreach ($name in @('PATH', 'GOROOT', 'GOENV', 'GOTOOLCHAIN', 'GOWORK', 'CC', 'CXX', 'CGO_ENABLED', 'GOOS', 'GOARCH', 'WEB_DIST', 'TEMP', 'TMP', 'RUSTDESK_ARTIFACTS_DIR')) {
+    foreach ($name in @('PATH', 'GOROOT', 'GOENV', 'GOTOOLCHAIN', 'GOWORK', 'CC', 'CXX', 'CGO_ENABLED', 'GOOS', 'GOARCH', 'WEB_DIST', 'TEMP', 'TMP', 'TMPDIR', 'npm_config_cache', 'RUSTDESK_ARTIFACTS_DIR')) {
         $saved[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
     }
     try {
@@ -112,6 +151,11 @@ function Invoke-ApiWindows {
         $env:GOENV = 'off'
         $env:GOTOOLCHAIN = 'local'
         $env:GOWORK = 'off'
+        $npmCache = Join-Path $webTools 'npm'
+        $env:npm_config_cache = $npmCache
+        $env:TEMP = $webTemp
+        $env:TMP = $webTemp
+        $env:TMPDIR = $webTemp
         $node = Get-ApiCommand 'node.exe'
         $npm = Get-ApiCommand 'npm.cmd'
         $nodeVersion = & $node --version
@@ -120,7 +164,7 @@ function Invoke-ApiWindows {
         Write-Host "Node: $node ($nodeVersion)"
         Write-Host "npm: $npm"
         if (-not $WebOnly) {
-            $go = Find-ApiGo $apiArtifacts
+            $go = Find-ApiGo $apiTools
             $compiler = Find-ApiCompiler $ArtifactsRoot
             $env:GOROOT = Split-Path (Split-Path $go -Parent) -Parent
             $env:PATH = (Split-Path $go -Parent) + ';' + (Split-Path $compiler -Parent) + ';' + $env:PATH
@@ -135,30 +179,32 @@ function Invoke-ApiWindows {
             Write-Host "CGO compiler: $compiler"
         }
         $webDist = Join-Path $webArtifacts 'publish\web'
+        $webStage = Join-Path $webArtifacts 'build\windows-amd64\source'
         Write-Host "API web source: $ApiWebSource"
+        Write-Host "API web stage: $webStage"
         Write-Host "API web publish: $webDist"
         if (-not $WebOnly) { Write-Host "API publish: $(Join-Path $apiArtifacts 'publish\windows-amd64')" }
         if ($Check) {
             Write-Host 'API prerequisites passed. No downloads or compilation were performed.'
             return
         }
-        $npmCache = Join-Path $webArtifacts 'cache\npm'
-        $webTemp = Join-Path $webArtifacts 'tmp'
         New-Item -ItemType Directory -Path $webTemp -Force | Out-Null
-        $env:TEMP = $webTemp
-        $env:TMP = $webTemp
-        Push-Location $ApiWebSource
+        Assert-ApiGeneratedPath $webArtifacts 'build\windows-amd64\source' | Out-Null
+        if (Test-Path -LiteralPath $webStage) { Remove-ApiGeneratedTree -Path $webStage }
+        New-Item -ItemType Directory -Path $webStage -Force | Out-Null
+        Copy-ApiWebSource -Source $ApiWebSource -Destination $webStage
+        Push-Location $webStage
         try {
             Invoke-ApiCommand $npm @('ci', '--include=dev', '--include=optional', '--no-audit', '--no-fund', '--cache', $npmCache)
-            Invoke-ApiCommand $npm @('run', 'build', '--cache', $npmCache)
+            Invoke-ApiCommand $npm @('run', 'build', '--', '--outDir', $webDist, '--emptyOutDir')
         } finally { Pop-Location }
         Assert-ApiFile (Join-Path $webDist 'index.html')
         if (-not $WebOnly) {
             $env:WEB_DIST = $webDist
-            $apiTemp = Join-Path $apiArtifacts 'tmp'
             New-Item -ItemType Directory -Path $apiTemp -Force | Out-Null
             $env:TEMP = $apiTemp
             $env:TMP = $apiTemp
+            $env:TMPDIR = $apiTemp
             Push-Location $ApiSource
             try { Invoke-ApiCommand (Join-Path $ApiSource 'build.bat') } finally { Pop-Location }
             Assert-ApiFile (Join-Path $apiArtifacts 'publish\windows-amd64\rustdesk-api.exe')

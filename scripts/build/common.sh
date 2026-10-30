@@ -22,7 +22,8 @@ Usage: bash build_linux.sh|build_windows.sh [--check] [--only all|client|server|
 
 Linux: Debian 13 amd64, natively or in WSL (RUSTDESK_WSL_DISTRO=Debian).
 Windows: native Windows x64, Visual Studio C++ Desktop tools and Windows SDK.
-Outputs: ../artifacts/rustdesk/publish/linux-x64 and windows-x64.
+Client outputs: ../artifacts/rustdesk/publish/linux-x64 and windows-x64.
+Server outputs: ../artifacts/rustdesk-server/publish/linux-x64 and windows-x64.
 --artifacts-root DIR or RUSTDESK_ARTIFACTS_DIR selects the shared artifacts root.
 --check verifies prerequisites without downloading tools or compiling.
 RUSTDESK_SERVER_DIR overrides the default sibling ../rustdesk-server source.

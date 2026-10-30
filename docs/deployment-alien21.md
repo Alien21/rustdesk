@@ -77,7 +77,7 @@ Audit našel pouze prázdnou výchozí `/etc/nftables.conf`. Runtime firewall a 
 
 ## Výměna binárek a záloha
 
-Z výstupu [sestavení](../README.build.md) `artifacts/publish/linux-x64/` přeneste oba nové soubory `hbbs` a `hbbr` do `/root/rustdesk-release/` na serveru. Musí jít o Linux x64 binárky ze stejného sestavení. Pro tento existující server použijte výměnu binárek; instalace nových .deb by mohla současně změnit správu služeb.
+Z výstupu [sestavení](../README.build.md) `../artifacts/rustdesk-server/publish/linux-x64/` přeneste oba nové soubory `hbbs` a `hbbr` do `/root/rustdesk-release/` na serveru. Musí jít o Linux x64 binárky ze stejného sestavení. Pro tento existující server použijte výměnu binárek; instalace nových .deb by mohla současně změnit správu služeb.
 
 V následujícím bloku pracujte jako root. Zastavení přeruší aktuální relace; zastavený hbbs umožní konzistentní kopii SQLite včetně případných WAL/SHM souborů.
 
@@ -186,6 +186,6 @@ Při testu 21. 10. 2026 přenosný klient zachoval ID, spustil vlastní IPC/back
 
 Odemčení síťových a bezpečnostních nastavení zachovává původní kontrolu administrátora Windows (UAC) i případný Unlock PIN. Výjimka pro přenosný backend byla při testu odmítnuta a odstraněna. Zelený stav Ready byl ověřen uživatelem; potíže se stále neaktivními ovládacími prvky po odemčení se ověřují samostatně.
 
-### Běžná instalace a návrat k originálu
+### Běžná instalace klienta
 
-Pro další testování byla zvolena běžná instalace klienta včetně jeho služby, s původními kontrolami oprávnění. Postup, umístění zálohy původní verze 1.5.0+68 a ověřeného oficiálního instalátoru pro návrat uvádí [návod pro Windows](windows-installation-alien21.md). Záloha byla dokončena a původní služba obnovena; vlastní instalace ani následné odemčení nastavení zatím ověřeny nejsou.
+Aktuální klientský instalátor aktualizuje program včetně jeho služby; postup uvádí [návod pro Windows](windows-installation-alien21.md). GUI i služba musí používat stejnou instalaci.
