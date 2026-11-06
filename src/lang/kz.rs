@@ -230,7 +230,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Wrong credentials", "Бұрыс тіркелгі деректер"),
         ("The verification code is incorrect or has expired", "Тексеру коды бұрыс немесе мерзімі өтіп кеткен"),
         ("Edit Tag", "Тақты Өндеу"),
-        ("Forget Password", "Құпия сөзді Ұмыту"),
+        ("Forget Password", "Сақталған құпия сөзді жою"),
         ("Favorites", "Таңдаулылар"),
         ("Add to Favorites", "Таңдаулыларға Қосу"),
         ("Remove from Favorites", "Таңдаулылардан алып тастау"),
@@ -834,5 +834,8 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Install or restart the updated RustDesk client service to use private keys and guest invitations", ""),
         ("Allow clients without the private key to connect to this device", ""),
         ("Update the RustDesk client service to allow public connections to this device", ""),
+        ("install-directory-not-empty-tip", "Таңдалған бума бос емес. Орнату бар деректерді жоюы мүмкін. Басқа буманы таңдаған жөн."),
+        ("Request approval", "Мақұлдауды сұрау"),
+        ("Forever", "Мәңгі"),
     ].iter().cloned().collect();
 }

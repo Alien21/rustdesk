@@ -230,7 +230,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Wrong credentials", "Nesprávné přihlašovací údaje"),
         ("The verification code is incorrect or has expired", "Ověřovací kód je nesprávný, nebo jeho platnost vypršela"),
         ("Edit Tag", "Upravit štítek"),
-        ("Forget Password", "Přestat si pamatovat heslo"),
+        ("Forget Password", "Vymazat uložené heslo"),
         ("Favorites", "Oblíbené"),
         ("Add to Favorites", "Přidat do oblíbených"),
         ("Remove from Favorites", "Odebrat z oblíbených"),
@@ -834,5 +834,8 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Install or restart the updated RustDesk client service to use private keys and guest invitations", "Pro použití privátního klíče a pozvánek pro hosty nainstalujte aktualizovaného klienta RustDesk včetně jeho služby nebo službu restartujte."),
         ("Allow clients without the private key to connect to this device", "Povolit klientům bez privátního klíče připojení k tomuto zařízení"),
         ("Update the RustDesk client service to allow public connections to this device", "Pro povolení veřejných připojení k tomuto zařízení aktualizujte službu klienta RustDesk."),
+        ("install-directory-not-empty-tip", "Vybraná složka není prázdná. Instalace může odstranit existující data. Zvažte výběr jiné složky."),
+        ("Request approval", "Požádat o schválení"),
+        ("Forever", "Navždy"),
     ].iter().cloned().collect();
 }

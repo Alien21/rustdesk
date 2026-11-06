@@ -230,7 +230,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Wrong credentials", "Vale kasutajanimi või parool"),
         ("The verification code is incorrect or has expired", "Kinnituskood on vale või aegunud"),
         ("Edit Tag", "Muuda silti"),
-        ("Forget Password", "Unusta parool"),
+        ("Forget Password", "Kustuta salvestatud parool"),
         ("Favorites", "Lemmikud"),
         ("Add to Favorites", "Lisa lemmikutesse"),
         ("Remove from Favorites", "Eemalda lemmikutest"),
@@ -834,5 +834,8 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Install or restart the updated RustDesk client service to use private keys and guest invitations", ""),
         ("Allow clients without the private key to connect to this device", ""),
         ("Update the RustDesk client service to allow public connections to this device", ""),
+        ("install-directory-not-empty-tip", "Valitud kaust ei ole tühi. Paigaldamine võib olemasolevad andmed kustutada. Kaalu teise kausta valimist."),
+        ("Request approval", "Küsi heakskiitu"),
+        ("Forever", "Igavesti"),
     ].iter().cloned().collect();
 }

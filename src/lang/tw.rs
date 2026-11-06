@@ -230,7 +230,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Wrong credentials", "登入資訊錯誤"),
         ("The verification code is incorrect or has expired", "驗證碼錯誤或已過期"),
         ("Edit Tag", "編輯標籤"),
-        ("Forget Password", "忘記密碼"),
+        ("Forget Password", "清除已儲存的密碼"),
         ("Favorites", "我的最愛"),
         ("Add to Favorites", "加入我的最愛"),
         ("Remove from Favorites", "從我的最愛中移除"),
@@ -834,5 +834,8 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Install or restart the updated RustDesk client service to use private keys and guest invitations", ""),
         ("Allow clients without the private key to connect to this device", ""),
         ("Update the RustDesk client service to allow public connections to this device", ""),
+        ("install-directory-not-empty-tip", "所選資料夾不是空的。安裝可能刪除現有資料。建議選擇其他資料夾。"),
+        ("Request approval", "請求批准"),
+        ("Forever", "永久"),
     ].iter().cloned().collect();
 }

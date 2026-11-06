@@ -230,7 +230,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Wrong credentials", "Thông tin đăng nhập sai"),
         ("The verification code is incorrect or has expired", "Mã xác thực không đúng hoặc đã hết hạn"),
         ("Edit Tag", "Sửa thẻ"),
-        ("Forget Password", "Quên mật khẩu"),
+        ("Forget Password", "Xóa mật khẩu đã lưu"),
         ("Favorites", "Yêu thích"),
         ("Add to Favorites", "Thêm vào yêu thích"),
         ("Remove from Favorites", "Xóa khỏi yêu thích"),
@@ -834,5 +834,8 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Install or restart the updated RustDesk client service to use private keys and guest invitations", ""),
         ("Allow clients without the private key to connect to this device", ""),
         ("Update the RustDesk client service to allow public connections to this device", ""),
+        ("install-directory-not-empty-tip", "Thư mục đã chọn không trống. Quá trình cài đặt có thể xóa dữ liệu hiện có. Hãy cân nhắc chọn một thư mục khác."),
+        ("Request approval", "Yêu cầu phê duyệt"),
+        ("Forever", "Vĩnh viễn"),
     ].iter().cloned().collect();
 }

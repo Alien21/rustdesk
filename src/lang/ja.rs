@@ -230,7 +230,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Wrong credentials", "資格情報が間違っています"),
         ("The verification code is incorrect or has expired", "認証コードが間違っているか、有効期限が切れています"),
         ("Edit Tag", "タグを編集"),
-        ("Forget Password", "パスワードを忘れた"),
+        ("Forget Password", "保存済みのパスワードを削除"),
         ("Favorites", "お気に入り"),
         ("Add to Favorites", "お気に入りに追加"),
         ("Remove from Favorites", "お気に入りから削除"),
@@ -834,5 +834,8 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Install or restart the updated RustDesk client service to use private keys and guest invitations", ""),
         ("Allow clients without the private key to connect to this device", ""),
         ("Update the RustDesk client service to allow public connections to this device", ""),
+        ("install-directory-not-empty-tip", "選択したフォルダーは空ではありません。インストールにより既存のデータが削除される可能性があります。別のフォルダーを選択することをおすすめします。"),
+        ("Request approval", "承認を要求"),
+        ("Forever", "無期限"),
     ].iter().cloned().collect();
 }

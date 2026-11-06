@@ -230,7 +230,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Wrong credentials", "Λάθος διαπιστευτήρια"),
         ("The verification code is incorrect or has expired", "Ο κωδικός επαλήθευσης είναι λανθασμένος ή έχει λήξει"),
         ("Edit Tag", "Επεξεργασία ετικέτας"),
-        ("Forget Password", "Διαγραφή απομνημονευμένου κωδικού"),
+        ("Forget Password", "Διαγραφή αποθηκευμένου κωδικού πρόσβασης"),
         ("Favorites", "Αγαπημένα"),
         ("Add to Favorites", "Προσθήκη στα αγαπημένα"),
         ("Remove from Favorites", "Κατάργηση από τα Αγαπημένα"),
@@ -834,5 +834,8 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Install or restart the updated RustDesk client service to use private keys and guest invitations", ""),
         ("Allow clients without the private key to connect to this device", ""),
         ("Update the RustDesk client service to allow public connections to this device", ""),
+        ("install-directory-not-empty-tip", "Ο επιλεγμένος φάκελος δεν είναι κενός. Η εγκατάσταση ενδέχεται να διαγράψει υπάρχοντα δεδομένα. Εξετάστε το ενδεχόμενο να επιλέξετε διαφορετικό φάκελο."),
+        ("Request approval", "Αίτημα έγκρισης"),
+        ("Forever", "Για πάντα"),
     ].iter().cloned().collect();
 }
